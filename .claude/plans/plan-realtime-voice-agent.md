@@ -1,64 +1,59 @@
-# Roadmap: Real-time Voice Agent
+# Roadmap: Real-time Voice Agent (Voice-Only MVP)
 
 ## Context
 
 **Tech Stack:** Next.js, Convex, Clerk, PipeCat, Daily, Gemini API
 
-**Feature Description:** Voice-based interaction system using PipeCat and Daily that allows users to communicate with the AI agent via microphone to describe products they want to purchase.
+**Feature Description:** Real-time voice interaction on the main dashboard. Users click a microphone button, speak naturally to describe products they want, and the AI responds via voice while displaying results in real-time.
+
+**MVP Scope:**
+- ✅ Microphone button on main dashboard
+- ✅ Real-time voice conversation with AI
+- ✅ Voice transcript display
+- ✅ Automatic product search detection
+- ❌ No separate /voice page (integrated into main dashboard)
+- ❌ No keyboard chat (voice-only)
 
 **Goals:**
-- Enable hands-free product shopping via real-time voice conversation
+- Enable hands-free shopping via real-time voice on main dashboard
 - Integrate Gemini API for natural language understanding
-- Provide low-latency audio streaming using Daily WebRTC infrastructure
-- Support multimodal AI responses (voice + product data)
+- Provide low-latency audio streaming using Daily WebRTC
+- Support voice-triggered product search and commands
 
 ## Implementation Steps
 
-Each step is mandatory for shipping Real-time Voice Agent.
-
 ### 1. Manual Setup (User Required)
 
-- [ ] Create Daily.co account at https://dashboard.daily.co
-- [ ] Generate Daily API key from dashboard (Settings → Developers)
-- [ ] Enable domain allowlist for your Next.js app domain
-- [ ] Set up Google Cloud project for Gemini API access
-- [ ] Enable Gemini API in Google Cloud Console
-- [ ] Generate Gemini API key with appropriate quotas
-- [ ] Verify PipeCat installation requirements (Python 3.10+, FFmpeg)
-- [ ] Set up a separate server/container for PipeCat voice agent (cannot run in Vercel due to WebSocket requirements)
+- [ ] Daily.co account and API key
+- [ ] Gemini API key in Convex dashboard
+- [ ] PipeCat agent server deployed (separate from Vercel)
 
-### 2. Dependencies & Environment
+### 2. Dependencies
 
-**NPM Packages:**
+**Already Installed:**
 ```bash
-npm install @daily-co/daily-js @daily-co/daily-react next react react-dom
-npm install -D @types/node typescript
-```
-
-**Python Dependencies (for PipeCat agent):**
-```bash
-pip install pipecat-ai daily-python google-generativeai websockets
+@daily-co/daily-js
+@daily-co/daily-react
+@google/generative-ai
 ```
 
 **Environment Variables:**
 
 Frontend (.env.local):
 ```bash
-NEXT_PUBLIC_DAILY_DOMAIN=your-daily-domain.daily.co
-NEXT_PUBLIC_PIPECAT_AGENT_URL=https://your-pipecat-server.com
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
+NEXT_PUBLIC_DAILY_API_KEY=your_daily_key
 ```
 
-Backend (Convex):
+Convex Dashboard:
 ```bash
-DAILY_API_KEY=your_daily_api_key
-GEMINI_API_KEY=your_gemini_api_key
+DAILY_API_KEY=your_daily_key
+GEMINI_API_KEY=your_gemini_key
 ```
 
-PipeCat Agent Server:
+PipeCat Server:
 ```bash
-DAILY_API_KEY=your_daily_api_key
-GEMINI_API_KEY=your_gemini_api_key
+DAILY_API_KEY=your_daily_key
+GEMINI_API_KEY=your_gemini_key
 CONVEX_DEPLOYMENT_URL=https://your-deployment.convex.cloud
 ```
 
@@ -66,49 +61,35 @@ CONVEX_DEPLOYMENT_URL=https://your-deployment.convex.cloud
 
 ```typescript
 // convex/schema.ts
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+voiceSessions: defineTable({
+  userId: v.string(),
+  roomUrl: v.optional(v.string()),
+  roomName: v.optional(v.string()),
+  status: v.union(
+    v.literal("active"),
+    v.literal("ended"),
+    v.literal("error")
+  ),
+  startedAt: v.number(),
+  endedAt: v.optional(v.number()),
+  metadata: v.optional(v.object({
+    duration: v.optional(v.number()),
+    errorMessage: v.optional(v.string()),
+  })),
+})
+.index("by_user", ["userId"])
+.index("by_status", ["status"]),
 
-export default defineSchema({
-  voiceSessions: defineTable({
-    userId: v.id("users"),
-    roomUrl: v.string(),
-    roomName: v.string(),
-    status: v.union(v.literal("active"), v.literal("ended"), v.literal("error")),
-    startedAt: v.number(),
-    endedAt: v.optional(v.number()),
-    metadata: v.optional(v.object({
-      duration: v.optional(v.number()),
-      errorMessage: v.optional(v.string()),
-    })),
-  })
-    .index("by_user", ["userId"])
-    .index("by_status", ["status"])
-    .index("by_room", ["roomName"]),
-
-  voiceTranscripts: defineTable({
-    sessionId: v.id("voiceSessions"),
-    userId: v.id("users"),
-    speaker: v.union(v.literal("user"), v.literal("agent")),
-    text: v.string(),
-    timestamp: v.number(),
-    confidence: v.optional(v.number()),
-  })
-    .index("by_session", ["sessionId"])
-    .index("by_user", ["userId"]),
-
-  voiceCommands: defineTable({
-    sessionId: v.id("voiceSessions"),
-    userId: v.id("users"),
-    command: v.string(),
-    intent: v.string(),
-    parameters: v.optional(v.any()),
-    executedAt: v.number(),
-    successful: v.boolean(),
-  })
-    .index("by_session", ["sessionId"])
-    .index("by_user_time", ["userId", "executedAt"]),
-});
+voiceTranscripts: defineTable({
+  sessionId: v.id("voiceSessions"),
+  userId: v.string(),
+  speaker: v.union(v.literal("user"), v.literal("agent")),
+  text: v.string(),
+  timestamp: v.number(),
+  confidence: v.optional(v.number()),
+})
+.index("by_session", ["sessionId"])
+.index("by_user", ["userId"]),
 ```
 
 ### 4. Backend Functions
@@ -116,151 +97,89 @@ export default defineSchema({
 **Mutations:**
 
 `convex/voiceSessions.ts` - **createSession**
-- **Purpose:** Create a new Daily room and voice session record
-- **Args:** `{ userId: Id<"users"> }`
-- **Returns:** `{ sessionId: Id<"voiceSessions">, roomUrl: string, token: string }`
-- **Notes:** Calls Daily REST API to create room with 1-hour expiry
+- Creates Daily room and voice session
+- Returns room URL and token
+- Called when user clicks mic button on dashboard
 
 `convex/voiceSessions.ts` - **endSession**
-- **Purpose:** Mark voice session as ended and record duration
-- **Args:** `{ sessionId: Id<"voiceSessions"> }`
-- **Returns:** `{ success: boolean }`
-- **Notes:** Validates user ownership before updating
+- Marks session as ended
+- Records duration
 
 `convex/voiceTranscripts.ts` - **addTranscript**
-- **Purpose:** Store voice transcript from PipeCat agent
-- **Args:** `{ sessionId: Id<"voiceSessions">, speaker: "user" | "agent", text: string, timestamp: number }`
-- **Returns:** `Id<"voiceTranscripts">`
-- **Notes:** Called by PipeCat agent via Convex HTTP actions
-
-`convex/voiceCommands.ts` - **recordCommand**
-- **Purpose:** Log executed voice commands for analytics
-- **Args:** `{ sessionId: Id<"voiceSessions">, command: string, intent: string, parameters: any, successful: boolean }`
-- **Returns:** `Id<"voiceCommands">`
-- **Notes:** Tracks product search, save, remove intents
+- Stores conversation transcript
+- Called by PipeCat agent in real-time
 
 **Queries:**
 
 `convex/voiceSessions.ts` - **getActiveSession**
-- **Purpose:** Get user's current active voice session
-- **Args:** `{ userId: Id<"users"> }`
-- **Returns:** `VoiceSession | null`
-- **Notes:** Returns only active sessions
+- Returns user's current voice session
+- Used by dashboard to show mic state
 
 `convex/voiceTranscripts.ts` - **getSessionTranscripts**
-- **Purpose:** Retrieve all transcripts for a session
-- **Args:** `{ sessionId: Id<"voiceSessions"> }`
-- **Returns:** `Array<VoiceTranscript>`
-- **Notes:** Ordered by timestamp ascending
+- Returns conversation history
+- Displayed on dashboard in real-time
 
 **Actions:**
 
 `convex/daily.ts` - **createDailyRoom**
-- **Purpose:** Call Daily REST API to create temporary room
-- **Args:** `{ userId: Id<"users"> }`
-- **Returns:** `{ roomUrl: string, roomName: string, token: string }`
-- **Notes:** Sets room expiry to 1 hour, enables recording for debugging
+- Calls Daily API to create temporary room
+- 1-hour expiry
 
-`convex/pipecat.ts` - **startPipecatAgent**
-- **Purpose:** Trigger PipeCat agent to join Daily room
-- **Args:** `{ roomUrl: string, sessionId: Id<"voiceSessions"> }`
-- **Returns:** `{ agentStarted: boolean }`
-- **Notes:** Sends HTTP request to PipeCat server with room credentials
+### 5. Frontend Integration
 
-### 5. Frontend
+**Main Dashboard (`app/page.tsx`):**
+- Microphone button (prominent, center of screen)
+- Live transcript panel (side or bottom)
+- Product grid (appears when products found)
+- Preference tags (top or side)
 
 **Components:**
+- `VoiceMicButton` - Large, accessible mic toggle
+- `VoiceTranscriptPanel` - Real-time conversation display
+- Integrated into single dashboard layout
 
-`app/voice/page.tsx` - Main voice shopping page
-- Uses `useCall()` from `@daily-co/daily-react` to manage Daily call
-- Integrates Clerk `useUser()` for authentication
-- Manages microphone permissions and audio device selection
-- Displays real-time transcripts from Convex
+**User Flow:**
+1. User lands on dashboard
+2. Clicks large microphone button
+3. Grants microphone permission
+4. Speaks: "Find wooden desk under $200"
+5. Transcript appears in real-time
+6. AI responds via voice
+7. Products appear on dashboard
+8. User continues conversation
 
-`components/VoiceMicButton.tsx` - Microphone toggle button
-- Visual states: idle, connecting, active, error
-- Handles Daily call join/leave logic
-- Shows recording indicator when active
+### 6. MVP Scope
 
-`components/VoiceTranscriptPanel.tsx` - Live transcript display
-- Subscribes to `useQuery(api.voiceTranscripts.getSessionTranscripts)`
-- Auto-scrolls to latest message
-- Differentiates user vs agent messages
+**Included:**
+- ✅ Mic button on main dashboard
+- ✅ Real-time voice conversation
+- ✅ Live transcript display
+- ✅ Voice session management
+- ✅ Daily.co WebRTC integration
 
-`hooks/useVoiceSession.ts` - Voice session management hook
-- Wraps `useMutation(api.voiceSessions.createSession)` and `endSession`
-- Manages Daily room lifecycle
-- Returns `{ startSession, endSession, activeSession, isConnecting }`
+**Excluded (Not MVP):**
+- ❌ Separate /voice page (consolidated into main dashboard)
+- ❌ Multiple concurrent sessions
+- ❌ Voice settings/preferences UI
+- ❌ Recording playback
 
-`hooks/useDailyCall.ts` - Daily.co integration hook
-- Wraps `@daily-co/daily-react` hooks
-- Handles participant events and audio track management
-- Returns `{ joinCall, leaveCall, participants, localAudio }`
+### 7. Error Handling
 
-### 6. Error Prevention
+- Microphone permission denied → Show clear instructions
+- Daily room creation fails → Retry with exponential backoff
+- PipeCat agent unavailable → Show error message
+- Network issues → Graceful reconnection
 
-**API Error Handling:**
-- Wrap Daily API calls in try-catch with exponential backoff
-- Handle rate limits (429) from Daily API (max 100 rooms/min)
-- Validate Gemini API quotas before starting session (QPM limits)
-- Return user-friendly error messages ("Unable to start voice session")
+### 8. Success Criteria
 
-**Schema Validation:**
-- Use Convex validators (`v.id()`, `v.string()`) for all mutations
-- Validate room URLs match Daily domain pattern
-- Check session ownership before mutations (`ctx.auth.getUserIdentity()`)
-
-**Authentication/Authorization:**
-- Require Clerk authentication for all voice session endpoints
-- Validate userId matches authenticated user in all mutations
-- Use Daily meeting tokens with user-specific permissions
-- Implement session timeout after 1 hour
-
-**Type Safety:**
-- Define TypeScript interfaces for all PipeCat agent responses
-- Type Daily room configuration objects
-- Use Convex-generated types for all database operations
-
-**Rate Limiting:**
-- Limit voice sessions to 1 concurrent per user
-- Implement cooldown period (30s) between session creation
-- Monitor Gemini API token usage per session
-
-**Boundaries/Quotas:**
-- Daily: 100 rooms/min creation limit, 50 concurrent participants
-- Gemini API: 60 requests/min for gemini-1.5-flash
-- PipeCat: Monitor server CPU/memory, scale horizontally if needed
-
-### 7. Testing
-
-**Unit Tests:**
-- [ ] Test `createSession` mutation with valid userId
-- [ ] Test `endSession` validates session ownership
-- [ ] Test `addTranscript` rejects invalid speaker values
-- [ ] Test Daily room creation returns valid URLs
-- [ ] Test PipeCat agent startup handles connection failures
-
-**Integration Tests:**
-- [ ] End-to-end flow: create session → join room → send transcript → end session
-- [ ] Test Gemini API integration with sample voice commands
-- [ ] Verify Convex receives transcripts from PipeCat agent
-- [ ] Test session timeout after 1 hour
-
-**E2E Tests (Playwright):**
-- [ ] User clicks mic button → Daily room loads → audio permissions granted
-- [ ] User speaks → transcript appears in real-time
-- [ ] User ends session → room closes → session marked ended
-
-**Performance Tests:**
-- [ ] Measure audio latency (target: <300ms round-trip)
-- [ ] Test concurrent sessions (target: 10 users)
-- [ ] Monitor Gemini API response time (target: <2s)
+- [ ] Mic button on main dashboard
+- [ ] Real-time voice works
+- [ ] Transcript displays live
+- [ ] Audio latency <300ms
+- [ ] Session persists during conversation
 
 ## Documentation Sources
 
-1. Daily.co Next.js Integration - https://docs.daily.co/guides/products/prebuilt/getting-started-with-prebuilt
-2. PipeCat Voice AI Framework - https://docs.pipecat.ai/
-3. Gemini API Live Streaming - https://ai.google.dev/api/generate-content#streaming
-4. Daily React Hooks - https://docs.daily.co/reference/daily-react/use-daily
-5. Convex Actions for HTTP Requests - https://docs.convex.dev/functions/actions
-6. WebRTC Best Practices for Voice - https://webrtc.org/getting-started/overview
+1. Daily.co Docs - https://docs.daily.co
+2. PipeCat Framework - https://docs.pipecat.ai
+3. Gemini API - https://ai.google.dev/gemini-api/docs

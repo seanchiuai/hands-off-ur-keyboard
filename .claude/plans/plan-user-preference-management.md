@@ -1,105 +1,93 @@
-# Roadmap: User Preference Management and Product Refinement
+# Roadmap: User Preference Management (Voice-Only MVP)
 
 ## Context
 
-**Tech Stack:** Next.js, Convex, Clerk, Gemini API, BrightData MCP
+**Tech Stack:** Next.js, Convex, Clerk, Gemini API
 
-**Feature Description:** System to save and display user preferences as tags (e.g., "wooden", "at least 3ft", "under $20") based on voice interactions, stored in Convex database. Includes functionality to request cheaper alternatives or products with specific features through voice commands, triggering new refined searches.
+**Feature Description:** Automatically extract user preferences from voice conversations and display them as visual tags on the main dashboard. Enable voice-based search refinement like "find cheaper options" or "show me wooden ones."
+
+**MVP Scope:**
+- ✅ Auto-extract preferences from voice ("wooden desk under $200" → 2 tags)
+- ✅ Display tags on main dashboard
+- ✅ Voice-based search refinement
+- ✅ Click tag to remove
+- ❌ No manual tag creation UI (voice-only)
+- ❌ No advanced preference settings
 
 **Goals:**
-- Extract preferences from natural language voice commands
-- Display preferences as visual tags in UI
-- Detect refinement requests ("find cheaper options", "show me wooden ones")
-- Trigger new searches with updated parameters
-- Track preference history for future personalization
+- Extract preferences from natural language voice
+- Display preferences as visual tags
+- Detect refinement requests via voice
+- Trigger refined searches automatically
 
 ## Implementation Steps
 
-Each step is mandatory for shipping User Preference Management and Product Refinement.
+### 1. Manual Setup
 
-### 1. Manual Setup (User Required)
+Requires Gemini API key in Convex dashboard (already configured).
 
-- [ ] Ensure Gemini API is configured with structured output support
-- [ ] Enable function calling in Gemini API project
-- [ ] Verify BrightData MCP server is running (from product search setup)
-- [ ] No additional accounts required
+### 2. Dependencies
 
-### 2. Dependencies & Environment
-
-**NPM Packages:**
+**Already Installed:**
 ```bash
-npm install zod # for preference schema validation
-npm install date-fns # for preference expiration logic
-```
-
-**Environment Variables:**
-
-Frontend (.env.local):
-```bash
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
-NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
-```
-
-Backend (Convex):
-```bash
-GEMINI_API_KEY=your_gemini_api_key
-BRIGHTDATA_API_KEY=your_brightdata_key
+@google/generative-ai
+zod
+date-fns
 ```
 
 ### 3. Database Schema
 
 ```typescript
 // convex/schema.ts
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+userPreferences: defineTable({
+  userId: v.string(),
+  tag: v.string(), // "wooden", "under $20", "at least 3ft"
+  category: v.union(
+    v.literal("material"),
+    v.literal("price"),
+    v.literal("size"),
+    v.literal("feature"),
+    v.literal("color"),
+    v.literal("style"),
+    v.literal("other")
+  ),
+  value: v.optional(v.union(v.string(), v.number())),
+  extractedFrom: v.string(), // Original voice command
+  priority: v.number(), // 1-10 based on user emphasis
+  source: v.union(v.literal("voice"), v.literal("manual")),
+  productContext: v.optional(v.string()),
+  createdAt: v.number(),
+  expiresAt: v.optional(v.number()), // 30 days
+  useCount: v.number(),
+  lastUsedAt: v.number(),
+})
+.index("by_user", ["userId"])
+.index("by_user_and_category", ["userId", "category"]),
 
-export default defineSchema({
-  userPreferences: defineTable({
-    userId: v.id("users"),
-    tag: v.string(), // "wooden", "under $20", "at least 3ft"
-    category: v.union(
-      v.literal("material"),
-      v.literal("price"),
-      v.literal("size"),
-      v.literal("feature"),
-      v.literal("other")
-    ),
-    value: v.optional(v.union(v.string(), v.number())), // Structured value if applicable
-    extractedFrom: v.string(), // Original voice command
-    createdAt: v.number(),
-    expiresAt: v.optional(v.number()), // Auto-expire old preferences
-    useCount: v.number(), // Times used in searches
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_category", ["userId", "category"])
-    .index("by_expiry", ["expiresAt"]),
-
-  searchRefinements: defineTable({
-    userId: v.id("users"),
-    originalSearchId: v.id("productSearches"),
-    refinementType: v.union(
-      v.literal("cheaper"),
-      v.literal("feature"),
-      v.literal("price_range"),
-      v.literal("custom")
-    ),
-    voiceCommand: v.string(),
-    extractedPreferences: v.array(v.string()), // Tags extracted from command
-    newSearchId: v.id("productSearches"),
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_original_search", ["originalSearchId"]),
-
-  preferenceHistory: defineTable({
-    userId: v.id("users"),
-    preferenceId: v.id("userPreferences"),
-    usedInSearchId: v.id("productSearches"),
-    usedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_preference", ["preferenceId"]),
-});
+searchRefinements: defineTable({
+  userId: v.string(),
+  originalSearchId: v.string(),
+  refinementType: v.union(
+    v.literal("cheaper"),
+    v.literal("price_lower"),
+    v.literal("price_higher"),
+    v.literal("feature"),
+    v.literal("add_feature"),
+    v.literal("remove_feature"),
+    v.literal("price_range"),
+    v.literal("change_size"),
+    v.literal("custom")
+  ),
+  voiceCommand: v.string(),
+  extractedPreferences: v.array(v.string()),
+  refinementValue: v.optional(v.string()),
+  targetPercentage: v.optional(v.number()),
+  newSearchId: v.string(),
+  resultCount: v.optional(v.number()),
+  createdAt: v.number(),
+})
+.index("by_user", ["userId"])
+.index("by_original_search", ["originalSearchId"]),
 ```
 
 ### 4. Backend Functions
@@ -107,183 +95,130 @@ export default defineSchema({
 **Mutations:**
 
 `convex/userPreferences.ts` - **addPreference**
-- **Purpose:** Add new preference tag from voice command
-- **Args:** `{ userId: Id<"users">, tag: string, category: string, value?: string | number, extractedFrom: string }`
-- **Returns:** `Id<"userPreferences">`
-- **Notes:** Deduplicates similar tags (e.g., "wooden" and "wood"), sets expiry to 30 days
+- Adds preference tag from voice
+- Deduplicates similar tags
+- Sets 30-day expiry
 
 `convex/userPreferences.ts` - **removePreference**
-- **Purpose:** Remove preference tag (via voice or UI click)
-- **Args:** `{ userId: Id<"users">, preferenceId: Id<"userPreferences"> }`
-- **Returns:** `{ success: boolean }`
-- **Notes:** Soft delete or hard delete based on useCount
-
-`convex/userPreferences.ts` - **incrementUseCount**
-- **Purpose:** Track when preference is used in a search
-- **Args:** `{ preferenceId: Id<"userPreferences">, searchId: Id<"productSearches"> }`
-- **Returns:** `void`
-- **Notes:** Increments useCount, creates preferenceHistory entry
-
-`convex/searchRefinements.ts` - **recordRefinement**
-- **Purpose:** Log search refinement request
-- **Args:** `{ userId: Id<"users">, originalSearchId: Id<"productSearches">, refinementType: string, voiceCommand: string, extractedPreferences: string[], newSearchId: Id<"productSearches"> }`
-- **Returns:** `Id<"searchRefinements">`
-- **Notes:** Links original and refined searches for analytics
+- Removes preference by ID
+- Can be triggered by voice or tag click
 
 **Queries:**
 
 `convex/userPreferences.ts` - **getUserPreferences**
-- **Purpose:** Get all active preferences for user
-- **Args:** `{ userId: Id<"users"> }`
-- **Returns:** `Array<UserPreference>`
-- **Notes:** Filters out expired preferences, orders by useCount DESC
-
-`convex/userPreferences.ts` - **getPreferencesByCategory**
-- **Purpose:** Get preferences grouped by category
-- **Args:** `{ userId: Id<"users"> }`
-- **Returns:** `Record<Category, Array<UserPreference>>`
-- **Notes:** Useful for organized UI display
-
-`convex/searchRefinements.ts` - **getRefinementHistory**
-- **Purpose:** Get refinement history for a search
-- **Args:** `{ searchId: Id<"productSearches"> }`
-- **Returns:** `Array<SearchRefinement>`
-- **Notes:** Shows how user refined their search
+- Returns active preferences
+- Grouped by category
+- Ordered by priority/useCount
 
 **Actions:**
 
 `convex/gemini.ts` - **extractPreferences**
-- **Purpose:** Use Gemini structured output to extract preferences from voice command
-- **Args:** `{ command: string }`
-- **Returns:** `{ preferences: Array<{ tag: string, category: string, value?: any }> }`
-- **Notes:** Uses Gemini 1.5 Flash with JSON schema for consistent extraction
+- Analyzes voice transcript
+- Extracts structured preferences
+- Categorizes automatically
 
 `convex/gemini.ts` - **detectRefinementIntent**
-- **Purpose:** Determine if voice command is a refinement request
-- **Args:** `{ command: string, currentSearchId: Id<"productSearches"> }`
-- **Returns:** `{ isRefinement: boolean, refinementType: string, newParameters: SearchParameters }`
-- **Notes:** Detects phrases like "cheaper", "find wooden ones", "under $50"
+- Detects if user wants to refine search
+- Extracts refinement parameters
+- Triggers new search
 
 `convex/productSearch.ts` - **refineSearch**
-- **Purpose:** Execute new search with refined parameters
-- **Args:** `{ userId: Id<"users">, originalSearchId: Id<"productSearches">, newParameters: SearchParameters, voiceCommand: string }`
-- **Returns:** `{ newSearchId: Id<"productSearches">, refinementId: Id<"searchRefinements"> }`
-- **Notes:** Calls BrightData MCP with updated parameters, creates new search entry
+- Executes refined search
+- Applies new parameters
+- Updates product results
 
-### 5. Frontend
+### 5. Frontend Integration
+
+**Main Dashboard Layout:**
+```
+┌─────────────────────────────────────────┐
+│  ┌─────────────────────────────────┐    │
+│  │ Preferences:                    │    │
+│  │ [wooden] [under $200] [3ft+]    │    │
+│  │     (click X to remove)         │    │
+│  └─────────────────────────────────┘    │
+│                                         │
+│         [Mic Button]                    │
+│                                         │
+│  [Product Grid 1-20]                    │
+└─────────────────────────────────────────┘
+```
 
 **Components:**
 
-`components/PreferenceList.tsx` - Sidebar preference tag list
-- Uses `useQuery(api.userPreferences.getUserPreferences)`
-- Displays tags with remove button (X icon)
-- Groups by category (Material, Price, Size, etc.)
-- Shows count badge ("5 preferences")
-- Props: `{ userId: Id<"users"> }`
-
-`components/PreferenceTag.tsx` - Individual preference tag
-- Pill-shaped badge with tag text
+`components/PreferenceList.tsx`
+- Displays tags horizontally
+- Color-coded by category
 - Click X to remove
-- Color-coded by category (blue for price, green for material, etc.)
-- Props: `{ preference: UserPreference, onRemove: () => void }`
+- Auto-updates in real-time
 
-`components/RefinementSuggestions.tsx` - AI-suggested refinements
-- Displays after initial search completes
-- Shows buttons like "Show cheaper options", "Filter by material"
-- Click triggers voice-like refinement without speaking
-- Props: `{ searchId: Id<"productSearches"> }`
+`components/PreferenceTag.tsx`
+- Pill-shaped badge
+- Shows tag text
+- Remove button (X)
 
-**Hooks:**
+### 6. User Flow
 
-`hooks/usePreferences.ts` - Preference management
-- Wraps `useQuery(api.userPreferences.getUserPreferences)`
-- Wraps `useMutation(api.userPreferences.addPreference)` and `removePreference`
-- Wraps `useAction(api.gemini.extractPreferences)`
-- Returns `{ preferences, addPreference, removePreference, extractFromVoice }`
+**Initial Search:**
+1. User says: "Find wooden desk under $200"
+2. Products appear
+3. Tags auto-created: [wooden] [under $200]
+4. Tags displayed on dashboard
 
-`hooks/useSearchRefinement.ts` - Search refinement logic
-- Wraps `useAction(api.gemini.detectRefinementIntent)`
-- Wraps `useAction(api.productSearch.refineSearch)`
-- Manages refinement flow: detect → confirm → execute
-- Returns `{ refineSearch, isRefining, pendingRefinement }`
+**Refinement:**
+1. User says: "Find cheaper options"
+2. Voice agent detects refinement intent
+3. New search with lower price range
+4. Tag updates: [under $150]
+5. Products refresh
 
-### 6. Error Prevention
+**Manual Removal:**
+1. User clicks X on [wooden] tag
+2. Tag removed
+3. Preference no longer applied to future searches
 
-**API Error Handling:**
-- Catch Gemini API errors in preference extraction and use fallback keyword matching
-- Handle BrightData API errors during refined searches gracefully
-- Return partial results if some preferences can't be applied
-- Show user-friendly error messages ("Couldn't apply price filter")
+### 7. MVP Scope
 
-**Schema Validation:**
-- Use Zod to validate extracted preference structure
-- Ensure category is valid enum value
-- Validate price values are positive numbers
-- Check tag length is reasonable (<50 characters)
+**Included:**
+- ✅ Auto-extract from voice
+- ✅ Display tags on dashboard
+- ✅ Voice-based refinement
+- ✅ Click to remove tags
+- ✅ 30-day auto-expiry
 
-**Authentication/Authorization:**
-- Verify userId matches authenticated user in all preference mutations
-- Validate user owns the search being refined
-- Check user has access to preference history
+**Excluded (Not MVP):**
+- ❌ Manual tag creation UI
+- ❌ Tag editing/renaming
+- ❌ Preference priority settings
+- ❌ Import/export preferences
+- ❌ Preference sharing
 
-**Type Safety:**
-- Define strict TypeScript interfaces for preferences and refinements
-- Type Gemini structured output schema
-- Use Convex-generated types for all database operations
+### 8. Voice Command Examples
 
-**Rate Limiting:**
-- Limit preference extraction to 10 per minute per user
-- Throttle search refinements to 3 per minute
-- Prevent duplicate preference creation within 10 seconds
+**Preference Extraction:**
+```
+"wooden desk under $200" → [wooden] [under $200]
+"red shoes size 10" → [red] [size 10]
+"laptop with SSD at least 16GB RAM" → [SSD] [16GB+ RAM]
+```
 
-**Deduplication:**
-- Normalize tags before saving (lowercase, trim whitespace)
-- Detect semantic duplicates ("wooden" vs "wood") using Gemini
-- Merge similar preferences instead of creating duplicates
+**Refinement:**
+```
+"find cheaper options" → Lower price range
+"show me wooden ones" → Add material filter
+"under $50" → Update price limit
+"larger size" → Increase size constraint
+```
 
-**Boundaries/Quotas:**
-- Max 50 active preferences per user
-- Auto-expire preferences after 30 days of no use
-- Max 5 refinements per original search
-- Gemini API: 60 requests/min for extraction
+### 9. Success Criteria
 
-### 7. Testing
-
-**Unit Tests:**
-- [ ] Test `addPreference` deduplicates similar tags
-- [ ] Test `extractPreferences` with various voice commands
-- [ ] Test `detectRefinementIntent` identifies "cheaper" requests
-- [ ] Test preference expiration logic
-- [ ] Test category classification accuracy
-
-**Integration Tests:**
-- [ ] End-to-end: voice command → preference extraction → tag appears in UI
-- [ ] Test refinement flow: "find cheaper" → new search with updated price filter
-- [ ] Verify preferences are applied to new searches automatically
-- [ ] Test preference persistence across sessions
-
-**E2E Tests (Playwright):**
-- [ ] User says "wooden desk under $200" → two tags appear (material, price)
-- [ ] User clicks X on tag → tag removed
-- [ ] User says "find cheaper options" → new search with lower price limit
-- [ ] Preferences survive page refresh
-
-**Performance Tests:**
-- [ ] Measure preference extraction latency (target: <2s)
-- [ ] Test refinement search speed (target: <5s)
-- [ ] Monitor Gemini API response time (target: <1s)
-
-**Accuracy Tests:**
-- [ ] Test preference extraction accuracy (target: >90%)
-- [ ] Measure category classification accuracy (target: >85%)
-- [ ] Test deduplication accuracy (target: >95%)
-- [ ] Verify refinement intent detection accuracy (target: >90%)
+- [ ] Preferences auto-extract from voice
+- [ ] Tags display on dashboard
+- [ ] Refinement commands work
+- [ ] Tags clickable to remove
+- [ ] Real-time updates
 
 ## Documentation Sources
 
 1. Gemini Structured Output - https://ai.google.dev/gemini-api/docs/structured-output
-2. Gemini Function Calling - https://ai.google.dev/gemini-api/docs/function-calling
-3. Convex Indexes for Performance - https://docs.convex.dev/database/indexes
-4. BrightData Product Search Filters - https://docs.brightdata.com/scraping-automation/web-scraper-api/product-search
-5. Natural Language Processing for E-commerce - https://arxiv.org/abs/2109.05903
-6. Zod Schema Validation - https://zod.dev/
+2. Convex Indexes - https://docs.convex.dev/database/indexes

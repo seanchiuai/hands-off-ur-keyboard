@@ -13,7 +13,7 @@ Actions
    - Look for markdown files describing implementations of features that are not in the `/.claude/plans` or `/docs` folder and move them there.
    - Reorganize scattered plans to `/docs/logs` and `/docs/setup`.
    - Merge those that describe the same features there is only one file for each feature under `/docs/logs`
-   - Rename plan files that don't match this format: `plan-[TITLE].md`.
+   - Rename log files that don't match this format: `log-[TITLE].md`.
 
 2) App routes
    - Live routes: `app/<segment>` with `page.tsx` or `layout.tsx` (exclude `app/_archive`); these map to URL directories.

@@ -27,8 +27,8 @@ Under `/.claude`:
 
 Under `/docs`:
 - **`/logs`** - Contains implementation logs tracking what was built
-  - One log per feature named `FEATURE_NAME.md` (uppercase, underscores)
-  - `APP_LOG.md` for cross-cutting changes (schema, auth, routing, dependencies)
+  - One log per feature named `log-[TITLE].md`
+  - `log-app.md` for cross-cutting changes (schema, auth, routing, dependencies)
   - Update logs every significant change (new functionality, bug fixes, refactors)
   - Append to existing logs, don't create dated versions
   - Format: `### [Date] - [What Changed]` with changes, files affected, and breaking changes

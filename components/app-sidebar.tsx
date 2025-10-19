@@ -24,8 +24,23 @@ import {
 const data = {
   navMain: [
     {
-      title: "Tasks",
-      url: "/tasks",
+      title: "Shop",
+      url: "/shop",
+      icon: IconListDetails,
+    },
+    {
+      title: "Search",
+      url: "/search",
+      icon: IconListDetails,
+    },
+    {
+      title: "Voice Demo",
+      url: "/voice-demo",
+      icon: IconListDetails,
+    },
+    {
+      title: "Voice Chat",
+      url: "/voice",
       icon: IconListDetails,
     },
   ],
@@ -53,7 +68,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:!p-1.5"
             >
-              <a href="/tasks">
+              <a href="/shop">
                 <IconInnerShadowTop className="!size-5" />
                 <span className="text-base font-semibold">VIBED</span>
               </a>

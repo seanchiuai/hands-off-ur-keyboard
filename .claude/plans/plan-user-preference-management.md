@@ -1,780 +1,289 @@
-# Roadmap: User Preference Management
+# Roadmap: User Preference Management and Product Refinement
 
 ## Context
 
-**Tech Stack**: Next.js 15 (App Router), Convex (Backend), Gemini Live API (NLP), Zod (Validation), React 19
+**Tech Stack:** Next.js, Convex, Clerk, Gemini API, BrightData MCP
 
-**Feature Description**: Capture, store, and display user shopping preferences as tags (e.g., "wooden", "at least 3ft", "under $20"). Preferences are extracted from voice conversations and used to personalize future product searches.
+**Feature Description:** System to save and display user preferences as tags (e.g., "wooden", "at least 3ft", "under $20") based on voice interactions, stored in Convex database. Includes functionality to request cheaper alternatives or products with specific features through voice commands, triggering new refined searches.
 
-**Goals**:
-- Automatic preference extraction from voice conversations
-- Tag-based preference display in UI
-- Voice commands to add/remove preferences
-- Preference-based search filtering
-- Preference history and analytics
-- Privacy controls for preference data
+**Goals:**
+- Extract preferences from natural language voice commands
+- Display preferences as visual tags in UI
+- Detect refinement requests ("find cheaper options", "show me wooden ones")
+- Trigger new searches with updated parameters
+- Track preference history for future personalization
 
 ## Implementation Steps
 
-Each step is mandatory for shipping the User Preference Management feature.
+Each step is mandatory for shipping User Preference Management and Product Refinement.
 
 ### 1. Manual Setup (User Required)
 
-- [ ] Configure Gemini API for NLP preference extraction
-- [ ] Set up Convex functions for preference management
-- [ ] Review privacy compliance (GDPR/CCPA) for storing preferences
-- [ ] Configure preference data retention policies
-- [ ] Set up analytics for preference usage
+- [ ] Ensure Gemini API is configured with structured output support
+- [ ] Enable function calling in Gemini API project
+- [ ] Verify BrightData MCP server is running (from product search setup)
+- [ ] No additional accounts required
 
 ### 2. Dependencies & Environment
 
-**NPM Packages**:
+**NPM Packages:**
 ```bash
-npm install zod
-npm install @google/genai
-npm install date-fns  # For date formatting
-npm install @radix-ui/react-popover
-npm install @radix-ui/react-dropdown-menu
+npm install zod # for preference schema validation
+npm install date-fns # for preference expiration logic
 ```
 
-**Environment Variables** (`.env.local`):
+**Environment Variables:**
+
+Frontend (.env.local):
 ```bash
-# Gemini API (already configured)
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+```
+
+Backend (Convex):
+```bash
 GEMINI_API_KEY=your_gemini_api_key
-GEMINI_MODEL=gemini-2.0-flash-exp
-
-# Convex (already configured)
-NEXT_PUBLIC_CONVEX_URL=your_convex_url
-
-# Preference Settings
-PREFERENCE_RETENTION_DAYS=365
-MAX_PREFERENCES_PER_USER=50
-PREFERENCE_CONFIDENCE_THRESHOLD=0.7
+BRIGHTDATA_API_KEY=your_brightdata_key
 ```
 
 ### 3. Database Schema
 
-**Convex Schema** (`convex/schema.ts`):
-
 ```typescript
+// convex/schema.ts
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
-  // User preferences as tags
   userPreferences: defineTable({
     userId: v.id("users"),
-    // Preference data
+    tag: v.string(), // "wooden", "under $20", "at least 3ft"
     category: v.union(
-      v.literal("material"),      // e.g., "wooden", "metal"
-      v.literal("dimension"),      // e.g., "at least 3ft", "6 inches"
-      v.literal("price"),          // e.g., "under $20", "budget-friendly"
-      v.literal("feature"),        // e.g., "waterproof", "rechargeable"
-      v.literal("brand"),          // e.g., "Nike", "Apple"
-      v.literal("color"),          // e.g., "blue", "dark"
-      v.literal("style"),          // e.g., "modern", "vintage"
-      v.literal("other")           // Uncategorized preferences
+      v.literal("material"),
+      v.literal("price"),
+      v.literal("size"),
+      v.literal("feature"),
+      v.literal("other")
     ),
-    tag: v.string(),               // Display text: "wooden", "under $20"
-    // Normalized values for filtering
-    normalizedValue: v.optional(v.object({
-      type: v.union(
-        v.literal("text"),
-        v.literal("numeric"),
-        v.literal("range")
-      ),
-      value: v.union(v.string(), v.number()),
-      unit: v.optional(v.string()),    // "USD", "ft", "inches"
-      operator: v.optional(v.union(
-        v.literal("eq"),    // equals
-        v.literal("lt"),    // less than
-        v.literal("lte"),   // less than or equal
-        v.literal("gt"),    // greater than
-        v.literal("gte")    // greater than or equal
-      )),
-    })),
-    // Metadata
-    confidence: v.number(),        // AI confidence score (0-1)
-    source: v.union(
-      v.literal("voice"),
-      v.literal("manual"),
-      v.literal("implicit")        // Inferred from behavior
-    ),
-    sessionId: v.optional(v.id("voiceSessions")),
+    value: v.optional(v.union(v.string(), v.number())), // Structured value if applicable
+    extractedFrom: v.string(), // Original voice command
     createdAt: v.number(),
-    lastUsed: v.optional(v.number()),
-    usageCount: v.number(),        // Times used in searches
-    isActive: v.boolean(),
+    expiresAt: v.optional(v.number()), // Auto-expire old preferences
+    useCount: v.number(), // Times used in searches
   })
     .index("by_user", ["userId"])
-    .index("by_category", ["category"])
-    .index("by_active", ["userId", "isActive"])
-    .index("by_usage", ["userId", "usageCount"]),
+    .index("by_user_category", ["userId", "category"])
+    .index("by_expiry", ["expiresAt"]),
 
-  // Preference extraction history (for debugging)
-  preferenceExtractions: defineTable({
+  searchRefinements: defineTable({
     userId: v.id("users"),
-    sessionId: v.optional(v.id("voiceSessions")),
-    transcript: v.string(),
-    extractedPreferences: v.array(v.object({
-      category: v.string(),
-      tag: v.string(),
-      confidence: v.number(),
-    })),
-    geminiResponse: v.string(),    // Raw AI response
-    timestamp: v.number(),
+    originalSearchId: v.id("productSearches"),
+    refinementType: v.union(
+      v.literal("cheaper"),
+      v.literal("feature"),
+      v.literal("price_range"),
+      v.literal("custom")
+    ),
+    voiceCommand: v.string(),
+    extractedPreferences: v.array(v.string()), // Tags extracted from command
+    newSearchId: v.id("productSearches"),
+    createdAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_session", ["sessionId"])
-    .index("by_timestamp", ["timestamp"]),
+    .index("by_original_search", ["originalSearchId"]),
 
-  // Preference usage in searches
-  preferenceUsage: defineTable({
+  preferenceHistory: defineTable({
     userId: v.id("users"),
     preferenceId: v.id("userPreferences"),
-    searchId: v.id("productSearches"),
-    wasApplied: v.boolean(),       // Whether filter was actually applied
-    resultsCount: v.number(),      // Products matching this preference
-    timestamp: v.number(),
+    usedInSearchId: v.id("productSearches"),
+    usedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_preference", ["preferenceId"])
-    .index("by_search", ["searchId"]),
+    .index("by_preference", ["preferenceId"]),
 });
 ```
 
 ### 4. Backend Functions
 
-#### Mutations
+**Mutations:**
 
-**Add Preference** (`convex/userPreferences.ts`):
-```typescript
-export const addPreference = mutation({
-  args: {
-    userId: v.id("users"),
-    category: v.union(
-      v.literal("material"),
-      v.literal("dimension"),
-      v.literal("price"),
-      v.literal("feature"),
-      v.literal("brand"),
-      v.literal("color"),
-      v.literal("style"),
-      v.literal("other")
-    ),
-    tag: v.string(),
-    normalizedValue: v.optional(v.object({
-      type: v.union(v.literal("text"), v.literal("numeric"), v.literal("range")),
-      value: v.union(v.string(), v.number()),
-      unit: v.optional(v.string()),
-      operator: v.optional(v.union(
-        v.literal("eq"),
-        v.literal("lt"),
-        v.literal("lte"),
-        v.literal("gt"),
-        v.literal("gte")
-      )),
-    })),
-    confidence: v.optional(v.number()),
-    source: v.union(v.literal("voice"), v.literal("manual"), v.literal("implicit")),
-    sessionId: v.optional(v.id("voiceSessions")),
-  },
-  handler: async (ctx, args) => {
-    // Check for duplicates
-    const existing = await ctx.db
-      .query("userPreferences")
-      .withIndex("by_active", (q) =>
-        q.eq("userId", args.userId).eq("isActive", true)
-      )
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("category"), args.category),
-          q.eq(q.field("tag"), args.tag)
-        )
-      )
-      .first();
+`convex/userPreferences.ts` - **addPreference**
+- **Purpose:** Add new preference tag from voice command
+- **Args:** `{ userId: Id<"users">, tag: string, category: string, value?: string | number, extractedFrom: string }`
+- **Returns:** `Id<"userPreferences">`
+- **Notes:** Deduplicates similar tags (e.g., "wooden" and "wood"), sets expiry to 30 days
 
-    if (existing) {
-      // Update usage count and last used
-      await ctx.db.patch(existing._id, {
-        usageCount: existing.usageCount + 1,
-        lastUsed: Date.now(),
-      });
-      return existing._id;
-    }
+`convex/userPreferences.ts` - **removePreference**
+- **Purpose:** Remove preference tag (via voice or UI click)
+- **Args:** `{ userId: Id<"users">, preferenceId: Id<"userPreferences"> }`
+- **Returns:** `{ success: boolean }`
+- **Notes:** Soft delete or hard delete based on useCount
 
-    // Check preference limit
-    const activeCount = await ctx.db
-      .query("userPreferences")
-      .withIndex("by_active", (q) =>
-        q.eq("userId", args.userId).eq("isActive", true)
-      )
-      .collect();
+`convex/userPreferences.ts` - **incrementUseCount**
+- **Purpose:** Track when preference is used in a search
+- **Args:** `{ preferenceId: Id<"userPreferences">, searchId: Id<"productSearches"> }`
+- **Returns:** `void`
+- **Notes:** Increments useCount, creates preferenceHistory entry
 
-    if (activeCount.length >= 50) {
-      throw new Error("Maximum preference limit reached (50)");
-    }
+`convex/searchRefinements.ts` - **recordRefinement**
+- **Purpose:** Log search refinement request
+- **Args:** `{ userId: Id<"users">, originalSearchId: Id<"productSearches">, refinementType: string, voiceCommand: string, extractedPreferences: string[], newSearchId: Id<"productSearches"> }`
+- **Returns:** `Id<"searchRefinements">`
+- **Notes:** Links original and refined searches for analytics
 
-    // Create new preference
-    const preferenceId = await ctx.db.insert("userPreferences", {
-      userId: args.userId,
-      category: args.category,
-      tag: args.tag,
-      normalizedValue: args.normalizedValue,
-      confidence: args.confidence ?? 1.0,
-      source: args.source,
-      sessionId: args.sessionId,
-      createdAt: Date.now(),
-      usageCount: 0,
-      isActive: true,
-    });
+**Queries:**
 
-    return preferenceId;
-  },
-});
-```
-- **Purpose**: Add new preference tag for user
-- **Returns**: `Id<"userPreferences">`
-- **Notes**: Prevents duplicates, enforces 50 preference limit
+`convex/userPreferences.ts` - **getUserPreferences**
+- **Purpose:** Get all active preferences for user
+- **Args:** `{ userId: Id<"users"> }`
+- **Returns:** `Array<UserPreference>`
+- **Notes:** Filters out expired preferences, orders by useCount DESC
 
-**Remove Preference** (`convex/userPreferences.ts`):
-```typescript
-export const removePreference = mutation({
-  args: {
-    userId: v.id("users"),
-    preferenceId: v.optional(v.id("userPreferences")),
-    tag: v.optional(v.string()),  // Alternative: remove by tag text
-  },
-  handler: async (ctx, args) => {
-    let preference;
+`convex/userPreferences.ts` - **getPreferencesByCategory**
+- **Purpose:** Get preferences grouped by category
+- **Args:** `{ userId: Id<"users"> }`
+- **Returns:** `Record<Category, Array<UserPreference>>`
+- **Notes:** Useful for organized UI display
 
-    if (args.preferenceId) {
-      preference = await ctx.db.get(args.preferenceId);
-    } else if (args.tag) {
-      preference = await ctx.db
-        .query("userPreferences")
-        .withIndex("by_active", (q) =>
-          q.eq("userId", args.userId).eq("isActive", true)
-        )
-        .filter((q) => q.eq(q.field("tag"), args.tag))
-        .first();
-    }
+`convex/searchRefinements.ts` - **getRefinementHistory**
+- **Purpose:** Get refinement history for a search
+- **Args:** `{ searchId: Id<"productSearches"> }`
+- **Returns:** `Array<SearchRefinement>`
+- **Notes:** Shows how user refined their search
 
-    if (!preference) {
-      throw new Error("Preference not found");
-    }
+**Actions:**
 
-    if (preference.userId !== args.userId) {
-      throw new Error("Unauthorized");
-    }
+`convex/gemini.ts` - **extractPreferences**
+- **Purpose:** Use Gemini structured output to extract preferences from voice command
+- **Args:** `{ command: string }`
+- **Returns:** `{ preferences: Array<{ tag: string, category: string, value?: any }> }`
+- **Notes:** Uses Gemini 1.5 Flash with JSON schema for consistent extraction
 
-    // Soft delete
-    await ctx.db.patch(preference._id, {
-      isActive: false,
-    });
+`convex/gemini.ts` - **detectRefinementIntent**
+- **Purpose:** Determine if voice command is a refinement request
+- **Args:** `{ command: string, currentSearchId: Id<"productSearches"> }`
+- **Returns:** `{ isRefinement: boolean, refinementType: string, newParameters: SearchParameters }`
+- **Notes:** Detects phrases like "cheaper", "find wooden ones", "under $50"
 
-    return { removed: true };
-  },
-});
-```
-- **Purpose**: Remove preference by ID or tag text (voice command)
-- **Returns**: `{ removed: boolean }`
-- **Notes**: Soft delete preserves analytics history
-
-**Update Preference Usage** (`convex/userPreferences.ts`):
-```typescript
-export const updatePreferenceUsage = mutation({
-  args: {
-    preferenceId: v.id("userPreferences"),
-  },
-  handler: async (ctx, args) => {
-    const preference = await ctx.db.get(args.preferenceId);
-    if (!preference) {
-      throw new Error("Preference not found");
-    }
-
-    await ctx.db.patch(args.preferenceId, {
-      usageCount: preference.usageCount + 1,
-      lastUsed: Date.now(),
-    });
-  },
-});
-```
-- **Purpose**: Track preference usage in searches
-- **Returns**: `void`
-- **Notes**: Called when preference applied to search
-
-**Log Preference Extraction** (`convex/preferenceExtractions.ts`):
-```typescript
-export const logPreferenceExtraction = mutation({
-  args: {
-    userId: v.id("users"),
-    sessionId: v.optional(v.id("voiceSessions")),
-    transcript: v.string(),
-    extractedPreferences: v.array(v.object({
-      category: v.string(),
-      tag: v.string(),
-      confidence: v.number(),
-    })),
-    geminiResponse: v.string(),
-  },
-  handler: async (ctx, args) => {
-    await ctx.db.insert("preferenceExtractions", {
-      ...args,
-      timestamp: Date.now(),
-    });
-  },
-});
-```
-- **Purpose**: Debug and audit preference extraction
-- **Returns**: `Id<"preferenceExtractions">`
-- **Notes**: Helps improve extraction accuracy
-
-#### Queries
-
-**Get Active Preferences** (`convex/userPreferences.ts`):
-```typescript
-export const getActivePreferences = query({
-  args: {
-    userId: v.id("users"),
-    category: v.optional(v.union(
-      v.literal("material"),
-      v.literal("dimension"),
-      v.literal("price"),
-      v.literal("feature"),
-      v.literal("brand"),
-      v.literal("color"),
-      v.literal("style"),
-      v.literal("other")
-    )),
-  },
-  handler: async (ctx, args) => {
-    let query = ctx.db
-      .query("userPreferences")
-      .withIndex("by_active", (q) =>
-        q.eq("userId", args.userId).eq("isActive", true)
-      );
-
-    const allPreferences = await query.collect();
-
-    // Filter by category if specified
-    if (args.category) {
-      return allPreferences.filter((p) => p.category === args.category);
-    }
-
-    // Sort by usage count (most used first)
-    return allPreferences.sort((a, b) => b.usageCount - a.usageCount);
-  },
-});
-```
-- **Purpose**: Retrieve user's active preferences for display
-- **Returns**: `UserPreference[]`
-- **Notes**: Sorted by usage frequency
-
-**Get Preferences for Search** (`convex/userPreferences.ts`):
-```typescript
-export const getPreferencesForSearch = query({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const preferences = await ctx.db
-      .query("userPreferences")
-      .withIndex("by_active", (q) =>
-        q.eq("userId", args.userId).eq("isActive", true)
-      )
-      .filter((q) => q.gte(q.field("confidence"), 0.7))
-      .collect();
-
-    // Group by category for structured filtering
-    const grouped: Record<string, any[]> = {};
-
-    preferences.forEach((pref) => {
-      if (!grouped[pref.category]) {
-        grouped[pref.category] = [];
-      }
-      grouped[pref.category].push(pref);
-    });
-
-    return grouped;
-  },
-});
-```
-- **Purpose**: Get preferences formatted for search filters
-- **Returns**: `Record<string, UserPreference[]>`
-- **Notes**: Only high-confidence preferences (≥0.7)
-
-**Get Preference Analytics** (`convex/userPreferences.ts`):
-```typescript
-export const getPreferenceAnalytics = query({
-  args: {
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const preferences = await ctx.db
-      .query("userPreferences")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-
-    const totalPreferences = preferences.length;
-    const activePreferences = preferences.filter((p) => p.isActive).length;
-
-    // Category breakdown
-    const byCategory = preferences.reduce((acc, pref) => {
-      acc[pref.category] = (acc[pref.category] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Source breakdown
-    const bySource = preferences.reduce((acc, pref) => {
-      acc[pref.source] = (acc[pref.source] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-
-    // Most used preferences
-    const mostUsed = [...preferences]
-      .sort((a, b) => b.usageCount - a.usageCount)
-      .slice(0, 10);
-
-    return {
-      totalPreferences,
-      activePreferences,
-      byCategory,
-      bySource,
-      mostUsed,
-    };
-  },
-});
-```
-- **Purpose**: Analytics dashboard data
-- **Returns**: Aggregated preference statistics
-- **Notes**: Used for user insights
-
-#### Actions
-
-**Extract Preferences from Transcript** (`convex/gemini.ts`):
-```typescript
-export const extractPreferences = action({
-  args: {
-    userId: v.id("users"),
-    transcript: v.string(),
-    sessionId: v.optional(v.id("voiceSessions")),
-  },
-  handler: async (ctx, args) => {
-    // Call Gemini API for NLP extraction
-    const prompt = `
-Extract shopping preferences from this transcript. Return a JSON array of preferences with category, tag, and confidence.
-
-Categories: material, dimension, price, feature, brand, color, style, other
-
-Transcript: "${args.transcript}"
-
-Examples:
-- "I want wooden chairs" → [{"category": "material", "tag": "wooden", "confidence": 0.95}]
-- "Under $50" → [{"category": "price", "tag": "under $50", "confidence": 0.9, "normalized": {"type": "numeric", "value": 50, "operator": "lt", "unit": "USD"}}]
-- "At least 3 feet tall" → [{"category": "dimension", "tag": "at least 3ft", "confidence": 0.85, "normalized": {"type": "numeric", "value": 3, "operator": "gte", "unit": "ft"}}]
-
-Return only valid JSON array.
-    `;
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": process.env.GEMINI_API_KEY!,
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      }
-    );
-
-    const data = await response.json();
-    const extractedText = data.candidates[0].content.parts[0].text;
-
-    // Parse JSON response
-    let preferences: any[] = [];
-    try {
-      const jsonMatch = extractedText.match(/\[.*\]/s);
-      if (jsonMatch) {
-        preferences = JSON.parse(jsonMatch[0]);
-      }
-    } catch (error) {
-      console.error("Failed to parse Gemini response:", error);
-    }
-
-    // Log extraction
-    await ctx.runMutation(internal.preferenceExtractions.logPreferenceExtraction, {
-      userId: args.userId,
-      sessionId: args.sessionId,
-      transcript: args.transcript,
-      extractedPreferences: preferences.map((p) => ({
-        category: p.category,
-        tag: p.tag,
-        confidence: p.confidence,
-      })),
-      geminiResponse: extractedText,
-    });
-
-    // Add high-confidence preferences
-    const addedPreferences = [];
-    for (const pref of preferences) {
-      if (pref.confidence >= 0.7) {
-        const preferenceId = await ctx.runMutation(
-          internal.userPreferences.addPreference,
-          {
-            userId: args.userId,
-            category: pref.category,
-            tag: pref.tag,
-            normalizedValue: pref.normalized,
-            confidence: pref.confidence,
-            source: "voice",
-            sessionId: args.sessionId,
-          }
-        );
-        addedPreferences.push(preferenceId);
-      }
-    }
-
-    return {
-      extracted: preferences.length,
-      added: addedPreferences.length,
-      preferences: addedPreferences,
-    };
-  },
-});
-```
-- **Purpose**: Use Gemini to extract preferences from voice transcript
-- **Returns**: `{ extracted: number, added: number, preferences: Id[] }`
-- **Tooling**: Gemini API for NLP
-- **Limits**: Only adds preferences with confidence ≥0.7
-- **Notes**: Called after each voice interaction
+`convex/productSearch.ts` - **refineSearch**
+- **Purpose:** Execute new search with refined parameters
+- **Args:** `{ userId: Id<"users">, originalSearchId: Id<"productSearches">, newParameters: SearchParameters, voiceCommand: string }`
+- **Returns:** `{ newSearchId: Id<"productSearches">, refinementId: Id<"searchRefinements"> }`
+- **Notes:** Calls BrightData MCP with updated parameters, creates new search entry
 
 ### 5. Frontend
 
-#### Components
+**Components:**
 
-**PreferenceTagList.tsx** (`app/components/PreferenceTagList.tsx`):
-```typescript
-"use client";
+`components/PreferenceList.tsx` - Sidebar preference tag list
+- Uses `useQuery(api.userPreferences.getUserPreferences)`
+- Displays tags with remove button (X icon)
+- Groups by category (Material, Price, Size, etc.)
+- Shows count badge ("5 preferences")
+- Props: `{ userId: Id<"users"> }`
 
-import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
-import { useAuth } from "@clerk/nextjs";
+`components/PreferenceTag.tsx` - Individual preference tag
+- Pill-shaped badge with tag text
+- Click X to remove
+- Color-coded by category (blue for price, green for material, etc.)
+- Props: `{ preference: UserPreference, onRemove: () => void }`
 
-export default function PreferenceTagList() {
-  const { userId } = useAuth();
-  const preferences = useQuery(api.userPreferences.getActivePreferences, {
-    userId: userId!,
-  });
-  const removePreference = useMutation(api.userPreferences.removePreference);
+`components/RefinementSuggestions.tsx` - AI-suggested refinements
+- Displays after initial search completes
+- Shows buttons like "Show cheaper options", "Filter by material"
+- Click triggers voice-like refinement without speaking
+- Props: `{ searchId: Id<"productSearches"> }`
 
-  if (!preferences || preferences.length === 0) {
-    return null;
-  }
+**Hooks:**
 
-  // Group by category
-  const grouped = preferences.reduce((acc, pref) => {
-    if (!acc[pref.category]) acc[pref.category] = [];
-    acc[pref.category].push(pref);
-    return acc;
-  }, {} as Record<string, typeof preferences>);
+`hooks/usePreferences.ts` - Preference management
+- Wraps `useQuery(api.userPreferences.getUserPreferences)`
+- Wraps `useMutation(api.userPreferences.addPreference)` and `removePreference`
+- Wraps `useAction(api.gemini.extractPreferences)`
+- Returns `{ preferences, addPreference, removePreference, extractFromVoice }`
 
-  return (
-    <div className="w-full bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-      <h3 className="text-sm font-semibold text-gray-700 mb-3">
-        Your Preferences
-      </h3>
-
-      <div className="space-y-3">
-        {Object.entries(grouped).map(([category, prefs]) => (
-          <div key={category}>
-            <p className="text-xs text-gray-500 uppercase mb-1">
-              {category}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <AnimatePresence mode="popLayout">
-                {prefs.map((pref) => (
-                  <motion.div
-                    key={pref._id}
-                    layout
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm"
-                  >
-                    <span>{pref.tag}</span>
-                    <button
-                      onClick={() =>
-                        removePreference({
-                          userId: userId!,
-                          preferenceId: pref._id,
-                        })
-                      }
-                      className="hover:bg-blue-200 rounded-full p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-```
-- **Purpose**: Display preference tags grouped by category
-- **State**: Real-time Convex subscription
-- **Animations**: Smooth add/remove transitions
-- **Actions**: Remove preference on click
-
-**AddPreferenceButton.tsx** (`app/components/AddPreferenceButton.tsx`):
-- Client Component with dropdown menu
-- Category selector
-- Text input for tag
-- Calls `useMutation(api.userPreferences.addPreference)`
-- Validation before adding
-
-**PreferenceAnalyticsDashboard.tsx** (`app/components/PreferenceAnalyticsDashboard.tsx`):
-- Shows usage statistics
-- Charts for category distribution
-- Most-used preferences
-- Source breakdown (voice vs manual)
-
-#### State Strategy
-
-- **Preference List**: Real-time Convex via `useQuery()`
-- **Add/Remove Actions**: `useMutation()` with optimistic updates
-- **Extraction Results**: Streamed from voice session
-- **Analytics**: Separate query for dashboard
-
-#### File Structure
-
-```
-app/
-├── components/
-│   ├── PreferenceTagList.tsx
-│   ├── AddPreferenceButton.tsx
-│   ├── PreferenceAnalyticsDashboard.tsx
-│   └── PreferenceTag.tsx
-├── hooks/
-│   ├── usePreferences.ts
-│   └── usePreferenceExtraction.ts
-└── dashboard/
-    └── page.tsx (integrates PreferenceTagList)
-```
+`hooks/useSearchRefinement.ts` - Search refinement logic
+- Wraps `useAction(api.gemini.detectRefinementIntent)`
+- Wraps `useAction(api.productSearch.refineSearch)`
+- Manages refinement flow: detect → confirm → execute
+- Returns `{ refineSearch, isRefining, pendingRefinement }`
 
 ### 6. Error Prevention
 
-#### API Error Handling
-- Gemini extraction failures: Retry once, fallback to manual entry
-- Duplicate preferences: Silent merge with existing
-- Invalid category: Default to "other"
-- Preference limit exceeded: Show warning, suggest removal
+**API Error Handling:**
+- Catch Gemini API errors in preference extraction and use fallback keyword matching
+- Handle BrightData API errors during refined searches gracefully
+- Return partial results if some preferences can't be applied
+- Show user-friendly error messages ("Couldn't apply price filter")
 
-#### Schema Validation
-```typescript
-import { z } from "zod";
+**Schema Validation:**
+- Use Zod to validate extracted preference structure
+- Ensure category is valid enum value
+- Validate price values are positive numbers
+- Check tag length is reasonable (<50 characters)
 
-const PreferenceSchema = z.object({
-  category: z.enum([
-    "material",
-    "dimension",
-    "price",
-    "feature",
-    "brand",
-    "color",
-    "style",
-    "other",
-  ]),
-  tag: z.string().min(1).max(50),
-  confidence: z.number().min(0).max(1),
-});
+**Authentication/Authorization:**
+- Verify userId matches authenticated user in all preference mutations
+- Validate user owns the search being refined
+- Check user has access to preference history
 
-const NormalizedValueSchema = z.object({
-  type: z.enum(["text", "numeric", "range"]),
-  value: z.union([z.string(), z.number()]),
-  unit: z.string().optional(),
-  operator: z.enum(["eq", "lt", "lte", "gt", "gte"]).optional(),
-});
-```
+**Type Safety:**
+- Define strict TypeScript interfaces for preferences and refinements
+- Type Gemini structured output schema
+- Use Convex-generated types for all database operations
 
-#### Rate Limiting
-- Preference extraction: Once per voice transcript
-- Manual adds: Max 10 per minute
-- Preference removal: No limit (user control)
+**Rate Limiting:**
+- Limit preference extraction to 10 per minute per user
+- Throttle search refinements to 3 per minute
+- Prevent duplicate preference creation within 10 seconds
 
-#### Authentication & Authorization
-- All preference operations require authenticated user
-- Users can only access/modify their own preferences
-- Privacy: No cross-user preference sharing
+**Deduplication:**
+- Normalize tags before saving (lowercase, trim whitespace)
+- Detect semantic duplicates ("wooden" vs "wood") using Gemini
+- Merge similar preferences instead of creating duplicates
 
-#### Type Safety
-- Strict TypeScript for all preference operations
-- Convex auto-generated types
-- Zod validation for Gemini responses
-
-#### Boundaries & Quotas
+**Boundaries/Quotas:**
 - Max 50 active preferences per user
-- Preference tags: 1-50 characters
-- Extraction: Process max 1000-character transcripts
-- Retention: Auto-archive preferences unused for 1 year
+- Auto-expire preferences after 30 days of no use
+- Max 5 refinements per original search
+- Gemini API: 60 requests/min for extraction
 
 ### 7. Testing
 
-#### Unit Tests
-- `addPreference`: Tests duplicate detection and limit enforcement
-- `removePreference`: Validates soft delete behavior
-- `extractPreferences`: Mock Gemini API, test parsing
-- `getActivePreferences`: Tests sorting and filtering
-- `getPreferencesForSearch`: Tests grouping logic
+**Unit Tests:**
+- [ ] Test `addPreference` deduplicates similar tags
+- [ ] Test `extractPreferences` with various voice commands
+- [ ] Test `detectRefinementIntent` identifies "cheaper" requests
+- [ ] Test preference expiration logic
+- [ ] Test category classification accuracy
 
-#### Integration Tests
-- Full extraction flow: Transcript → Gemini → Add preferences
-- Manual add: UI → Mutation → Display update
-- Remove: Click X → Mutation → UI update
-- Search integration: Preferences applied to filters
-- Analytics: Preference usage tracked correctly
+**Integration Tests:**
+- [ ] End-to-end: voice command → preference extraction → tag appears in UI
+- [ ] Test refinement flow: "find cheaper" → new search with updated price filter
+- [ ] Verify preferences are applied to new searches automatically
+- [ ] Test preference persistence across sessions
 
-#### End-to-End Tests (Playwright)
-1. User voice command: "I want wooden chairs under $100"
-2. Gemini extracts preferences
-3. Tags appear: "wooden", "under $100"
-4. User clicks X on "under $100"
-5. Tag removed from list
-6. User manually adds "modern" via button
-7. New tag appears
-8. Preferences persist after refresh
+**E2E Tests (Playwright):**
+- [ ] User says "wooden desk under $200" → two tags appear (material, price)
+- [ ] User clicks X on tag → tag removed
+- [ ] User says "find cheaper options" → new search with lower price limit
+- [ ] Preferences survive page refresh
 
-#### Performance Tests
-- Extraction latency: <2 seconds for typical transcript
-- UI rendering: 50 tags in <500ms
-- Real-time updates: New preferences appear within 1 second
-- Database queries: Preference fetch <100ms
+**Performance Tests:**
+- [ ] Measure preference extraction latency (target: <2s)
+- [ ] Test refinement search speed (target: <5s)
+- [ ] Monitor Gemini API response time (target: <1s)
 
-#### AI-Specific Tests
-- Extraction accuracy: Test against labeled dataset
-- Confidence calibration: High confidence = high accuracy
-- Category classification: >90% correct category
-- Normalization: Price/dimension values parsed correctly
-- Edge cases: Ambiguous phrases, negations, compound preferences
+**Accuracy Tests:**
+- [ ] Test preference extraction accuracy (target: >90%)
+- [ ] Measure category classification accuracy (target: >85%)
+- [ ] Test deduplication accuracy (target: >95%)
+- [ ] Verify refinement intent detection accuracy (target: >90%)
 
 ## Documentation Sources
 
-1. Gemini API NLP Guide - https://ai.google.dev/gemini-api/docs
-2. Convex Mutations - https://docs.convex.dev/functions/mutation-functions
-3. Zod Validation - https://zod.dev
-4. Framer Motion - https://www.framer.com/motion/
-5. Radix UI Dropdown - https://www.radix-ui.com/primitives/docs/components/dropdown-menu
-6. React Hooks Best Practices - https://react.dev/reference/react
-7. Next.js App Router - https://nextjs.org/docs/app
-8. TypeScript Handbook - https://www.typescriptlang.org/docs/handbook/
-9. GDPR Compliance Guide - https://gdpr.eu
-10. Convex Real-time Queries - https://docs.convex.dev/database/reading-data
+1. Gemini Structured Output - https://ai.google.dev/gemini-api/docs/structured-output
+2. Gemini Function Calling - https://ai.google.dev/gemini-api/docs/function-calling
+3. Convex Indexes for Performance - https://docs.convex.dev/database/indexes
+4. BrightData Product Search Filters - https://docs.brightdata.com/scraping-automation/web-scraper-api/product-search
+5. Natural Language Processing for E-commerce - https://arxiv.org/abs/2109.05903
+6. Zod Schema Validation - https://zod.dev/

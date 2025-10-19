@@ -1,88 +1,105 @@
 ---
 name: agent-dynamic-product-interface
-description: Dynamic product interface that displays numbered products in real-time with images, prices, and details
+description: Interactive product display that dynamically shows numbered product cards with images, prices, and details as the voice agent finds results
 model: inherit
-color: green
+color: purple
 tech_stack:
-  framework: Next.js + React
+  framework: Next.js
   database: Convex
   auth: Clerk
-  provider: Convex Real-time
+  provider: React components with real-time updates
 generated: 2025-10-18T00:00:00Z
 documentation_sources: [
-  "https://docs.convex.dev/client/react",
   "https://nextjs.org/docs",
-  "https://react.dev/reference/react",
-  "https://www.framer.com/motion"
+  "https://docs.convex.dev/client/react",
+  "https://clerk.com/docs/references/react/use-user",
+  "https://react.dev/reference/react/useEffect"
 ]
 ---
 
-# Agent: Dynamic Product Interface Implementation with Convex Real-time
+# Agent: Dynamic Product Interface Implementation with React and Next.js
+
+---
 
 ## Agent Overview
 
-This agent renders the dynamic product display interface that updates in real-time as the LLM backend agent discovers products. It subscribes to Convex queries for product updates, displays numbered product cards with images, prices, and details, handles user voice commands to save/remove products by number, and provides smooth animations for product additions and removals. The interface is fully reactive and synchronized across all connected clients.
+**Purpose** – This agent implements an interactive product display system that dynamically renders numbered product cards showing images, prices, and details as results stream in from the voice shopping assistant. The interface provides real-time visual feedback synchronized with voice interactions, creating a seamless multimodal shopping experience.
 
-**Tech Stack**: Next.js, React, Convex React hooks, Framer Motion (animations), TailwindCSS, TypeScript
+**Tech Stack** – Next.js 14+ (App Router), React 18+, Convex (real-time database), Clerk (authentication), TypeScript, Tailwind CSS, Framer Motion (animations).
 
-**Source**: Convex React documentation, Next.js documentation, Framer Motion
+**Source** – Next.js official documentation for App Router patterns, Convex React hooks documentation for real-time subscriptions, Clerk authentication guides, React documentation for component lifecycle and state management.
+
+---
 
 ## Critical Implementation Knowledge
 
-### Convex React Latest Updates 🚨
+### React Real-Time Updates 🚨
 
-* `useQuery` hook provides real-time subscriptions to Convex queries
-* `useMutation` hook enables optimistic updates for instant UI feedback
-* Queries automatically re-render components when database changes occur
-* ConvexProvider must wrap application to enable React hooks
-* Loading states handled via undefined return from useQuery
-* Subscriptions are automatically cleaned up on component unmount
+* **Latest Pattern**: Use Convex `useQuery` hook for automatic real-time subscriptions to product results
+* **State Management**: Products update automatically when voice agent adds new results to database
+* **Optimistic UI**: Show loading states immediately while data streams in
+* **Performance**: Leverage React 18+ automatic batching for smooth updates during rapid product additions
 
 ### Common Pitfalls & Solutions 🚨
 
-* **Pitfall**: Product list not updating in real-time when new products added
-  * **Solution**: Use `useQuery` with proper query parameters, ensure ConvexProvider is configured correctly
+* **Pitfall**: Products flicker or re-render unnecessarily during streaming updates
+  * **Solution**: Use React `key` prop with stable product IDs and implement proper memoization with `useMemo` for product list transformations
 
-* **Pitfall**: Images load slowly causing layout shift
-  * **Solution**: Use Next.js Image component with priority loading and fixed dimensions
+* **Pitfall**: Product images load slowly causing layout shift
+  * **Solution**: Use Next.js `<Image>` component with proper width/height, implement skeleton loading states, and preload images
 
-* **Pitfall**: Product numbering inconsistent when products removed
-  * **Solution**: Assign stable IDs on insertion, use _id for keys, display sequential numbers in UI only
+* **Pitfall**: Product numbering gets out of sync with display order
+  * **Solution**: Number products based on their position in the array after sorting by creation timestamp, not by database ID
 
-* **Pitfall**: Animation jank when products rapidly added
-  * **Solution**: Use Framer Motion's layoutId for smooth transitions and AnimatePresence for exit animations
+* **Pitfall**: Stale product data shown when switching between search sessions
+  * **Solution**: Implement session-based queries that filter products by current voice session ID
 
-* **Pitfall**: Optimistic updates causing flickering on mutation
-  * **Solution**: Implement proper optimistic update with rollback in useMutation options
+* **Pitfall**: Race conditions when multiple products added simultaneously
+  * **Solution**: Rely on Convex's atomic operations and consistent ordering by creation timestamp
 
 ### Best Practices 🚨
 
-* Use Convex `useQuery` for all real-time product data subscriptions
-* Implement virtualization for product lists exceeding 50 items
-* Use stable keys (_id) for list rendering to prevent re-renders
-* Prefetch product images to reduce loading states
-* Implement skeleton loaders for initial product loading
-* Use Framer Motion's layout animations for smooth product transitions
-* Handle edge cases: no products, loading states, error states
-* Optimize re-renders with React.memo for product cards
+* **DO** use Convex reactive queries to automatically sync UI with database changes
+* **DO** implement proper loading and empty states for better UX
+* **DO** add smooth animations for product cards appearing using Framer Motion
+* **DO** use semantic HTML and ARIA labels for accessibility
+* **DO** implement proper error boundaries for failed image loads
+* **DO** optimize for mobile-first responsive design
+* **DON'T** manually poll for updates - use Convex subscriptions
+* **DON'T** store product data in local component state - use database as source of truth
+* **DON'T** assume products arrive in order - always sort by timestamp
+* **DON'T** skip loading states - they provide critical user feedback
+* **DON'T** hardcode product card dimensions - use responsive design
+
+---
 
 ## Implementation Steps
 
-The architecture consists of React components that subscribe to Convex real-time queries and render products with animations and interactions.
+### Architecture Overview
+
+The Dynamic Product Interface uses a reactive architecture where Convex real-time queries automatically update the UI as the voice agent discovers and adds products. Products are stored in Convex with session IDs to isolate different search conversations. The frontend subscribes to the current session's products and renders them as numbered cards with smooth animations.
 
 ### Backend Implementation
 
-* `convex/schema.ts` - Defines product and session data schema
-* `convex/products.ts` - Product queries and mutations (from LLM agent)
-* Convex automatically handles real-time subscriptions and updates
+**Key Server Files:**
+
+* `convex/schema.ts` - Database schema defining products table with fields for name, price, image URL, description, session ID, and timestamps
+* `convex/products.ts` - Mutations for adding products from voice agent, queries for fetching products by session ID with proper sorting
+* `convex/sessions.ts` - Manages voice shopping session lifecycle and session-product relationships
+* `convex/http.ts` - HTTP endpoints for voice agent to POST product discoveries with proper CORS headers
 
 ### Frontend Integration
 
-* `components/ProductGrid.tsx` - Main product display grid with real-time updates
-* `components/ProductCard.tsx` - Individual product card component
-* `components/ProductSkeleton.tsx` - Loading skeleton for products
-* `hooks/useProductActions.ts` - Hook for save/remove product actions
-* `app/dashboard/page.tsx` - Main dashboard integrating all components
+**Key React Components:**
+
+* `app/shop/page.tsx` - Main shopping page that initializes voice session and renders product grid
+* `components/ProductCard.tsx` - Individual product card component with image, price, title, number badge, and details
+* `components/ProductGrid.tsx` - Grid container that subscribes to products via `useQuery` and handles real-time updates
+* `components/ProductSkeleton.tsx` - Loading skeleton for smooth loading experience
+* `hooks/useProducts.ts` - Custom hook wrapping Convex `useQuery` with session filtering logic
+* `hooks/useVoiceSession.ts` - Manages active voice shopping session state
+
+---
 
 ## Code Patterns
 
@@ -92,462 +109,535 @@ The architecture consists of React components that subscribe to Convex real-time
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Schema for product results discovered by voice agent
 export default defineSchema({
+  // Voice shopping sessions
+  voiceSessions: defineTable({
+    userId: v.string(), // Clerk user ID
+    status: v.union(v.literal("active"), v.literal("completed"), v.literal("cancelled")),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  // Products discovered during voice shopping
   products: defineTable({
-    sessionId: v.string(),
-    userId: v.string(),
+    sessionId: v.id("voiceSessions"), // Links to voice session
     name: v.string(),
-    price: v.number(),
-    imageUrl: v.string(),
-    details: v.string(),
-    url: v.string(),
-    saved: v.optional(v.boolean()),
-    savedAt: v.optional(v.number()),
-    createdAt: v.number()
+    price: v.number(), // Store in cents to avoid floating point issues
+    currency: v.string(), // e.g., "USD"
+    imageUrl: v.string(), // Product image URL
+    description: v.string(),
+    vendor: v.optional(v.string()),
+    externalUrl: v.optional(v.string()), // Link to product page
+    position: v.number(), // Order in which voice agent found the product
+    createdAt: v.number(), // Timestamp for consistent ordering
   })
-    .index("by_session", ["sessionId"])
-    .index("by_user", ["userId"]),
-
-  preferences: defineTable({
-    userId: v.string(),
-    preference: v.string(),
-    category: v.string(),
-    createdAt: v.number()
-  })
-    .index("by_user", ["userId"]),
-
-  messages: defineTable({
-    sessionId: v.string(),
-    userId: v.string(),
-    role: v.string(),
-    content: v.string(),
-    timestamp: v.number(),
-    metadata: v.optional(v.any())
-  })
-    .index("by_session", ["sessionId"])
+    .index("by_session", ["sessionId", "position"]) // Efficient session-based queries
+    .index("by_created", ["createdAt"]), // Fallback ordering
 });
 ```
 
-This schema defines the database structure for products, preferences, and messages with proper indexing for efficient queries.
+This schema establishes the core data structure with proper indexing for efficient real-time queries. The `position` field ensures products display in discovery order, while `sessionId` isolates products between different shopping conversations.
 
-### `components/ProductCard.tsx`
+---
+
+### `convex/products.ts`
 
 ```typescript
-'use client';
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 
-import { motion } from 'framer-motion';
-import Image from 'next/image';
-import { Check, X } from 'lucide-react';
-import { Doc } from '@/convex/_generated/dataModel';
+// Add product discovered by voice agent
+export const addProduct = mutation({
+  args: {
+    sessionId: v.id("voiceSessions"),
+    name: v.string(),
+    price: v.number(),
+    currency: v.string(),
+    imageUrl: v.string(),
+    description: v.string(),
+    vendor: v.optional(v.string()),
+    externalUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Verify session exists and is active
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) {
+      throw new Error("Session not found");
+    }
+    if (session.status !== "active") {
+      throw new Error("Cannot add products to inactive session");
+    }
 
-interface ProductCardProps {
-  product: Doc<'products'>;
-  number: number;
-  onSave: (id: string) => void;
-  onRemove: (id: string) => void;
+    // Verify user authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.subject !== session.userId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get next position number for this session
+    const existingProducts = await ctx.db
+      .query("products")
+      .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+
+    const position = existingProducts.length + 1;
+
+    // Insert product with auto-generated timestamp
+    const productId = await ctx.db.insert("products", {
+      sessionId: args.sessionId,
+      name: args.name,
+      price: args.price,
+      currency: args.currency,
+      imageUrl: args.imageUrl,
+      description: args.description,
+      vendor: args.vendor,
+      externalUrl: args.externalUrl,
+      position,
+      createdAt: Date.now(),
+    });
+
+    return productId;
+  },
+});
+
+// Query products for a specific session (real-time)
+export const listSessionProducts = query({
+  args: {
+    sessionId: v.id("voiceSessions"),
+  },
+  handler: async (ctx, { sessionId }) => {
+    // Verify session access
+    const session = await ctx.db.get(sessionId);
+    if (!session) {
+      return [];
+    }
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity || identity.subject !== session.userId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Fetch products ordered by position
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .order("asc")
+      .collect();
+
+    // Return with formatted price for display
+    return products.map((product) => ({
+      ...product,
+      formattedPrice: formatPrice(product.price, product.currency),
+    }));
+  },
+});
+
+// Helper function to format price
+function formatPrice(cents: number, currency: string): string {
+  const dollars = cents / 100;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency,
+  }).format(dollars);
 }
+```
 
-export function ProductCard({ product, number, onSave, onRemove }: ProductCardProps) {
+This implementation ensures products are added with proper authentication, session validation, and automatic position numbering. The query provides real-time updates with formatted prices for immediate display.
+
+---
+
+### `convex/sessions.ts`
+
+```typescript
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+
+// Create new voice shopping session
+export const createSession = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const sessionId = await ctx.db.insert("voiceSessions", {
+      userId: identity.subject,
+      status: "active",
+      startedAt: Date.now(),
+    });
+
+    return sessionId;
+  },
+});
+
+// Get active session for current user
+export const getActiveSession = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    // Find most recent active session
+    const sessions = await ctx.db
+      .query("voiceSessions")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .order("desc")
+      .take(1);
+
+    return sessions[0] || null;
+  },
+});
+
+// Complete shopping session
+export const completeSession = mutation({
+  args: {
+    sessionId: v.id("voiceSessions"),
+  },
+  handler: async (ctx, { sessionId }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const session = await ctx.db.get(sessionId);
+    if (!session || session.userId !== identity.subject) {
+      throw new Error("Session not found");
+    }
+
+    await ctx.db.patch(sessionId, {
+      status: "completed",
+      completedAt: Date.now(),
+    });
+  },
+});
+```
+
+Session management ensures proper lifecycle handling and user isolation for shopping conversations.
+
+---
+
+### `app/shop/page.tsx`
+
+```typescript
+"use client";
+
+import { useEffect } from "react";
+import { useUser } from "@clerk/nextjs";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import ProductGrid from "@/components/ProductGrid";
+import VoiceInterface from "@/components/VoiceInterface";
+
+export default function ShopPage() {
+  const { isLoaded, isSignedIn } = useUser();
+  const activeSession = useQuery(api.sessions.getActiveSession);
+  const createSession = useMutation(api.sessions.createSession);
+
+  // Auto-create session if none exists
+  useEffect(() => {
+    if (isLoaded && isSignedIn && activeSession === null) {
+      createSession();
+    }
+  }, [isLoaded, isSignedIn, activeSession, createSession]);
+
+  if (!isLoaded) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p>Please sign in to start shopping</p>
+      </div>
+    );
+  }
+
   return (
-    <motion.div
-      layoutId={product._id}
-      initial={{ opacity: 0, scale: 0.8, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.8, y: -20 }}
-      transition={{ duration: 0.3 }}
-      className="relative bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow"
-    >
-      {/* Product Number Badge */}
-      <div className="absolute top-2 left-2 z-10 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
-        {number}
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Voice Shopping</h1>
+          <p className="mt-2 text-gray-600">Speak to find products</p>
+        </header>
+
+        {/* Voice interface component */}
+        <VoiceInterface sessionId={activeSession?._id} />
+
+        {/* Product grid with real-time updates */}
+        {activeSession && <ProductGrid sessionId={activeSession._id} />}
       </div>
-
-      {/* Saved Indicator */}
-      {product.saved && (
-        <div className="absolute top-2 right-2 z-10 bg-green-500 text-white rounded-full p-1">
-          <Check className="w-4 h-4" />
-        </div>
-      )}
-
-      {/* Product Image */}
-      <div className="relative w-full h-48 bg-gray-200">
-        <Image
-          src={product.imageUrl || '/placeholder-product.png'}
-          alt={product.name}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          priority={number <= 3}
-        />
-      </div>
-
-      {/* Product Details */}
-      <div className="p-4">
-        <h3 className="font-semibold text-lg mb-2 line-clamp-2">
-          {product.name}
-        </h3>
-
-        <p className="text-2xl font-bold text-blue-600 mb-2">
-          ${product.price.toFixed(2)}
-        </p>
-
-        <p className="text-sm text-gray-600 line-clamp-3 mb-4">
-          {product.details}
-        </p>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          {!product.saved ? (
-            <button
-              onClick={() => onSave(product._id)}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <Check className="w-4 h-4" />
-              Save
-            </button>
-          ) : (
-            <button
-              onClick={() => onRemove(product._id)}
-              className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Remove
-            </button>
-          )}
-
-          <a
-            href={product.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded-lg transition-colors text-center"
-          >
-            View
-          </a>
-        </div>
-      </div>
-    </motion.div>
+    </div>
   );
 }
 ```
 
-This component renders an individual product card with animations, image, price, details, and action buttons.
+The main page orchestrates session management and component rendering with proper authentication checks.
+
+---
 
 ### `components/ProductGrid.tsx`
 
 ```typescript
-'use client';
+"use client";
 
-import { useQuery } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import { AnimatePresence, motion } from 'framer-motion';
-import { ProductCard } from './ProductCard';
-import { ProductSkeleton } from './ProductSkeleton';
-import { useProductActions } from '@/hooks/useProductActions';
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+import ProductCard from "./ProductCard";
+import ProductSkeleton from "./ProductSkeleton";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface ProductGridProps {
-  sessionId: string;
+  sessionId: Id<"voiceSessions">;
 }
 
-export function ProductGrid({ sessionId }: ProductGridProps) {
-  const products = useQuery(api.products.listForSession, { sessionId });
-  const { saveProduct, removeProduct } = useProductActions();
+export default function ProductGrid({ sessionId }: ProductGridProps) {
+  // Real-time subscription to products
+  const products = useQuery(api.products.listSessionProducts, { sessionId });
 
-  // Loading state
   if (products === undefined) {
+    // Loading state with skeletons
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(6)].map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
           <ProductSkeleton key={i} />
         ))}
       </div>
     );
   }
 
-  // Empty state
   if (products.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-center"
-        >
-          <p className="text-xl mb-2">No products yet</p>
-          <p className="text-sm">
-            Use the microphone to tell me what you're looking for!
-          </p>
-        </motion.div>
+      <div className="mt-8 text-center py-12 bg-white rounded-lg shadow">
+        <p className="text-gray-500">No products found yet. Start speaking to discover products!</p>
       </div>
     );
   }
 
   return (
-    <motion.div
-      layout
-      className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-    >
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
       <AnimatePresence mode="popLayout">
         {products.map((product, index) => (
-          <ProductCard
+          <motion.div
             key={product._id}
-            product={product}
-            number={index + 1}
-            onSave={saveProduct}
-            onRemove={removeProduct}
-          />
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{
+              duration: 0.3,
+              delay: index * 0.1, // Stagger animation
+              ease: "easeOut",
+            }}
+            layout
+          >
+            <ProductCard
+              number={product.position}
+              name={product.name}
+              price={product.formattedPrice}
+              imageUrl={product.imageUrl}
+              description={product.description}
+              vendor={product.vendor}
+              externalUrl={product.externalUrl}
+            />
+          </motion.div>
         ))}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 }
 ```
 
-This component displays the product grid with real-time updates from Convex, handling loading and empty states.
+The product grid uses Convex's reactive query to automatically update when new products are added, with smooth animations for appearing cards.
+
+---
+
+### `components/ProductCard.tsx`
+
+```typescript
+"use client";
+
+import Image from "next/image";
+import { useState } from "react";
+
+interface ProductCardProps {
+  number: number;
+  name: string;
+  price: string;
+  imageUrl: string;
+  description: string;
+  vendor?: string;
+  externalUrl?: string;
+}
+
+export default function ProductCard({
+  number,
+  name,
+  price,
+  imageUrl,
+  description,
+  vendor,
+  externalUrl,
+}: ProductCardProps) {
+  const [imageError, setImageError] = useState(false);
+
+  return (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 relative">
+      {/* Product number badge */}
+      <div className="absolute top-4 left-4 bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg z-10 shadow-lg">
+        {number}
+      </div>
+
+      {/* Product image */}
+      <div className="relative h-64 bg-gray-100">
+        {!imageError ? (
+          <Image
+            src={imageUrl}
+            alt={name}
+            fill
+            className="object-cover"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            onError={() => setImageError(true)}
+            priority={number <= 3} // Prioritize first 3 images
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <svg
+              className="w-16 h-16 text-gray-300"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+        )}
+      </div>
+
+      {/* Product details */}
+      <div className="p-4">
+        <div className="flex justify-between items-start mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 flex-1">
+            {name}
+          </h3>
+          <p className="text-xl font-bold text-purple-600 ml-2 whitespace-nowrap">
+            {price}
+          </p>
+        </div>
+
+        {vendor && (
+          <p className="text-sm text-gray-500 mb-2">by {vendor}</p>
+        )}
+
+        <p className="text-gray-600 text-sm line-clamp-3 mb-4">
+          {description}
+        </p>
+
+        {externalUrl && (
+          <a
+            href={externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block w-full text-center bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition-colors duration-200 font-medium"
+          >
+            View Product
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+Product cards display all relevant information with proper image handling, accessibility, and responsive design.
+
+---
 
 ### `components/ProductSkeleton.tsx`
 
 ```typescript
-'use client';
-
-export function ProductSkeleton() {
+export default function ProductSkeleton() {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden animate-pulse">
       {/* Image skeleton */}
-      <div className="w-full h-48 bg-gray-300" />
+      <div className="h-64 bg-gray-200" />
 
       {/* Content skeleton */}
       <div className="p-4">
-        <div className="h-6 bg-gray-300 rounded mb-2" />
-        <div className="h-8 bg-gray-300 rounded w-1/2 mb-2" />
-        <div className="h-4 bg-gray-300 rounded mb-1" />
-        <div className="h-4 bg-gray-300 rounded mb-1" />
-        <div className="h-4 bg-gray-300 rounded w-3/4 mb-4" />
-
-        {/* Button skeletons */}
-        <div className="flex gap-2">
-          <div className="flex-1 h-10 bg-gray-300 rounded-lg" />
-          <div className="flex-1 h-10 bg-gray-300 rounded-lg" />
+        <div className="flex justify-between mb-4">
+          <div className="h-6 bg-gray-200 rounded w-2/3" />
+          <div className="h-6 bg-gray-200 rounded w-16" />
         </div>
-      </div>
-    </div>
-  );
-}
-```
-
-This component provides a loading skeleton for products while data is being fetched.
-
-### `hooks/useProductActions.ts`
-
-```typescript
-'use client';
-
-import { useMutation } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import { useCallback } from 'react';
-import { Id } from '@/convex/_generated/dataModel';
-
-export function useProductActions() {
-  const saveMutation = useMutation(api.products.save);
-  const removeMutation = useMutation(api.products.remove);
-
-  const saveProduct = useCallback((productId: Id<'products'>) => {
-    saveMutation(
-      { productId },
-      {
-        optimisticUpdate: (localStore, args) => {
-          // Optimistically update the product to show saved state
-          const existingProduct = localStore.getQuery(api.products.listForSession, {
-            sessionId: 'current' // This should be the actual session ID
-          });
-
-          if (existingProduct) {
-            const updated = existingProduct.map(p =>
-              p._id === args.productId ? { ...p, saved: true } : p
-            );
-            localStore.setQuery(api.products.listForSession, {}, updated);
-          }
-        }
-      }
-    );
-  }, [saveMutation]);
-
-  const removeProduct = useCallback((productId: Id<'products'>) => {
-    removeMutation({ productId });
-  }, [removeMutation]);
-
-  return {
-    saveProduct,
-    removeProduct
-  };
-}
-```
-
-This hook provides product action handlers with optimistic updates for instant UI feedback.
-
-### `app/dashboard/page.tsx`
-
-```typescript
-'use client';
-
-import { useState, useEffect } from 'react';
-import { VoiceButton } from '@/components/VoiceButton';
-import { ProductGrid } from '@/components/ProductGrid';
-import { PreferenceList } from '@/components/PreferenceList';
-import { ConvexProvider, ConvexReactClient } from 'convex/react';
-import { ClerkProvider, useAuth } from '@clerk/nextjs';
-import { ConvexProviderWithClerk } from 'convex/react-clerk';
-
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
-
-function DashboardContent() {
-  const [sessionId, setSessionId] = useState<string>('');
-
-  useEffect(() => {
-    // Generate session ID on mount
-    setSessionId(`session_${Date.now()}`);
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Keep Your Hands Off Your Keyboard
-          </h1>
-          <p className="text-gray-600">
-            Voice-powered product shopping assistant
-          </p>
-        </header>
-
-        {/* Main Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Sidebar */}
-          <aside className="lg:col-span-1">
-            {/* Voice Button */}
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6 flex justify-center">
-              <VoiceButton />
-            </div>
-
-            {/* Preference List */}
-            <PreferenceList />
-          </aside>
-
-          {/* Product Grid */}
-          <main className="lg:col-span-3">
-            {sessionId && <ProductGrid sessionId={sessionId} />}
-          </main>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Dashboard() {
-  return (
-    <ClerkProvider>
-      <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-        <DashboardContent />
-      </ConvexProviderWithClerk>
-    </ClerkProvider>
-  );
-}
-```
-
-This page integrates all components into the main dashboard layout with real-time updates.
-
-### `components/PreferenceList.tsx`
-
-```typescript
-'use client';
-
-import { useQuery, useMutation } from 'convex/react';
-import { api } from '@/convex/_generated/api';
-import { X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-
-export function PreferenceList() {
-  const preferences = useQuery(api.preferences.list);
-  const removePreference = useMutation(api.preferences.remove);
-
-  if (preferences === undefined) {
-    return (
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-lg font-semibold mb-4">Preferences</h2>
         <div className="space-y-2">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-8 bg-gray-200 rounded animate-pulse" />
-          ))}
+          <div className="h-4 bg-gray-200 rounded w-full" />
+          <div className="h-4 bg-gray-200 rounded w-5/6" />
+          <div className="h-4 bg-gray-200 rounded w-4/6" />
         </div>
+        <div className="h-10 bg-gray-200 rounded mt-4" />
       </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h2 className="text-lg font-semibold mb-4">Preferences</h2>
-
-      {preferences.length === 0 ? (
-        <p className="text-sm text-gray-500">
-          No preferences saved yet
-        </p>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <AnimatePresence mode="popLayout">
-            {preferences.map((pref) => (
-              <motion.div
-                key={pref._id}
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center gap-2"
-              >
-                <span>{pref.preference}</span>
-                <button
-                  onClick={() => removePreference({ id: pref._id })}
-                  className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      )}
     </div>
   );
 }
 ```
 
-This component displays the preference list as tags with real-time updates and removal functionality.
+Skeleton loading states provide visual feedback while products load.
+
+---
 
 ## Testing & Debugging
 
-* Use Convex dashboard to monitor real-time query subscriptions
-* Test product additions by manually inserting via Convex dashboard
-* Verify animations by rapidly adding/removing products
-* Test loading states by throttling network in DevTools
-* Validate optimistic updates by checking UI before mutation completes
-* Test error boundaries for query failures
-* Verify image loading with various image URLs and broken links
-* Use React DevTools to inspect component re-renders and optimize
+* **Convex Dashboard** - Monitor real-time database updates as products are added, verify query performance and indexing
+* **React DevTools** - Inspect component re-renders, verify hooks are updating correctly, check for unnecessary re-renders
+* **Browser DevTools Network Tab** - Verify WebSocket connection for Convex subscriptions, check image loading performance
+* **Lighthouse** - Test performance, accessibility, and SEO scores for the product grid
+* **Console Logging** - Add logs to track product additions: `console.log("Product added:", product.name, "at position:", product.position)`
+* **Error Boundaries** - Implement error boundaries around ProductGrid to gracefully handle query failures
+* **Manual Testing** - Test with slow network to verify loading states, test with multiple rapid additions to verify animation performance
+* **Unit Tests** - Test ProductCard rendering with various prop combinations, test price formatting logic
+* **Integration Tests** - Test session creation and product addition flow end-to-end
+* **Visual Regression Tests** - Capture screenshots of product grid states to detect unintended UI changes
+
+---
 
 ## Environment Variables
 
-### Frontend (Next.js)
+### Frontend (.env.local)
 ```bash
-NEXT_PUBLIC_CONVEX_URL=https://your-project.convex.cloud
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_***  # Public key for client-side auth
+
+# Convex Real-time Database
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud  # WebSocket endpoint for queries
 ```
+
+### Backend (Convex Dashboard)
+```bash
+# Clerk JWT Configuration (set in Convex dashboard, NOT .env.local)
+CLERK_JWT_ISSUER_DOMAIN=https://your-clerk-domain.clerk.accounts.dev  # For token verification
+```
+
+---
 
 ## Success Metrics
 
-* Products appear in UI within 500ms of Convex insertion
-* Product grid supports 50+ products without performance degradation
-* Animations run at 60fps without jank or stuttering
-* Optimistic updates provide instant feedback for save/remove actions
-* Image loading completes within 2 seconds for priority products
-* Real-time updates sync across multiple browser tabs instantly
-* No visible layout shift when products are added or removed
-* Loading skeletons accurately represent final product card layout
-* Preference tags update in real-time when added via voice
+* **Real-time Responsiveness** - Products appear in UI within 100ms of voice agent adding them to database
+* **Smooth Animations** - Product cards animate in smoothly with staggered timing, no jank or layout shifts
+* **Image Loading Performance** - Product images load progressively with proper skeletons, no CLS (Cumulative Layout Shift)
+* **Session Isolation** - Products correctly filtered by session, no cross-contamination between shopping conversations
+* **Proper Numbering** - Products numbered 1, 2, 3... in order of discovery, numbers remain stable as products appear
+* **Error Handling** - Graceful fallbacks for failed image loads, network errors don't break the UI
+* **Accessibility** - ARIA labels present, keyboard navigation works, screen readers can announce product additions
+* **Mobile Responsiveness** - Grid adapts to mobile (1 column), tablet (2 columns), desktop (3 columns) layouts
+* **Authentication Security** - Unauthorized users cannot view or add products, session ownership verified server-side
+* **Query Performance** - Real-time queries execute in <50ms, database indexes properly utilized for session filtering

@@ -5,6 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Claude Code Instructions
 
 ### Custom Agents and Plans
+
+**IMPORTANT:** When searching for custom agents or plans, always look under the `/.claude` directory. When creating plans or log of code implementations, always store in the `/.claude` directory.
+
 - **`/agents`** - Contains custom agent definitions for specialized tasks
   - Before implementing features, check if a relevant agent exists in this directory
   - Invoke custom agents using the Task tool when their expertise matches the request
@@ -14,10 +17,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Before implementing features, check if a relevant plan exists in this directory
   - Follow the step-by-step instructions in the plan when implementing the feature
   - Plans provide architecture decisions, file locations, and implementation details
-  - If a user requests a feature with a plan, always reference and follow that plan
-  - If no matching plan exists, proceed with the implementation normally
+  - If a user requests new features relevant to an existing plan, modify that plan based on the user's request
+  - If no matching plan exists, create a new implementation plan
+  - Always update and check `PLANS_DIRECTORY.md` before implementing a new feature
+  - Plans should be named `FEATURE_[FEATURE DESCRIPTION]_IMPLEMENTATION.md`
 
-**IMPORTANT**: Always check these directories when starting a new feature or task. Custom agents and plans provide project-specific expertise and tested approaches when available.
+**IMPORTANT**: Always check these directories when starting a new feature or task. Always use the Context7 MCP to do more research for complicated features before creating and editing a plan. Custom agents, plans, and the spec sheet provide project-specific expertise and tested approaches when available.
 
 ## Commands
 
@@ -36,6 +41,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Convex
 - `npx convex dev` - Start Convex development server (auto-started with `npm run dev`)
 - `npx convex deploy` - Deploy Convex functions to production
+
+### Run/Execution Policy
+- Only run `npm run dev` for brief, self-contained testing.
+- Do not leave servers running after tests complete; stop them immediately.
+- If a server must be started to verify behavior, terminate it before ending the turn.
 
 ## Architecture
 
@@ -58,20 +68,6 @@ This is a full-stack TypeScript application using:
 - **Middleware** (middleware.ts) protects `/server` routes using Clerk
 - Path aliases configured: `@/*` maps to root directory
 
-## Setup Requirements
-
-### Environment Variables
-```env
-NEXT_PUBLIC_CONVEX_URL=<your-convex-deployment-url>
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<clerk-publishable-key>
-CLERK_SECRET_KEY=<clerk-secret-key>
-```
-
-### Clerk JWT Configuration
-1. Create a JWT template named "convex" in Clerk dashboard
-2. Set issuer domain in the template
-3. Add `CLERK_JWT_ISSUER_DOMAIN` environment variable in Convex dashboard
-
 ## Project Structure
 - `/app` - Next.js pages and layouts (App Router)
   - `/app/(auth)` - Authentication pages if needed
@@ -93,6 +89,10 @@ CLERK_SECRET_KEY=<clerk-secret-key>
 - JWT-based authentication with Clerk
 - Custom hooks for framework integration
 - ESLint configuration for code quality
+
+## Debugging
+- ALWAYS, call the context7 mcp for debugging errors or when the user complains of a feature that is not working even thought the code is implemented.
+- If the first attempt does not work after using context7, create a query for the research agent with sufficient project and error context to find information to fix it. The user will report back with the results, then continue to implement the fix.
 
 ## Authentication & Security
 - Protected routes using Clerk's authentication in middleware.ts
@@ -147,3 +147,11 @@ When implementing features that require API keys:
 2. **Match existing design** - New designs should closely match the existing UI screens, pages, and components, unless otherwise stated by the user
 3. **Then add functionality** - After the UI is in place, implement the business logic, state management, and backend integration
 4. This approach ensures a clear separation of concerns and makes it easier to iterate on both design and functionality independently
+
+## Minimum Viable Product (MVP) Approach
+**IMPORTANT**: When building, work on ONLY the Minimum Viable Product (MVP):
+- Focus exclusively on implementing the core features explicitly requested by users
+- Prioritize ensuring these core features work reliably and deliver real user value
+- Avoid introducing additional features like extra settings, customization, or "nice-to-have" options that were not requested
+- Do not add additional features without confirmation from the user
+- The MVP goal is to ship a solid, usable version of what users asked for as quickly as possible, before considering enhancements or additional features

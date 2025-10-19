@@ -97,10 +97,39 @@ export async function POST() {
 
     const { token } = await tokenResponse.json();
 
+    // Create Convex voice session
+    let sessionId: string | null = null;
+    try {
+      const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+      if (convexUrl) {
+        const sessionResponse = await fetch(`${convexUrl}/api/mutation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            path: 'voiceSessions:createSession',
+            args: {
+              roomUrl: room.url,
+              roomName: room.name,
+            },
+          }),
+        });
+
+        if (sessionResponse.ok) {
+          const sessionData = await sessionResponse.json();
+          sessionId = sessionData.sessionId;
+          console.log('✅ Convex session created:', sessionId);
+        }
+      }
+    } catch (convexError) {
+      console.error('⚠️  Failed to create Convex session:', convexError);
+    }
+
     // Start PipeCat voice agent
     try {
       const orchestratorUrl = process.env.PIPECAT_ORCHESTRATOR_URL || 'http://localhost:8000';
-      await fetch(`${orchestratorUrl}/start-agent`, {
+      const agentResponse = await fetch(`${orchestratorUrl}/start-agent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,11 +137,17 @@ export async function POST() {
         body: JSON.stringify({
           room_url: room.url,
           token: token,
-          session_id: room.name, // We'll use room name as session ID
+          session_id: sessionId || room.name, // Use Convex session ID or fallback to room name
           user_id: userId,
         }),
       });
-      console.log('✅ Voice agent started for room:', room.name);
+
+      if (agentResponse.ok) {
+        console.log('✅ Voice agent started for room:', room.name);
+      } else {
+        const errorText = await agentResponse.text();
+        console.error('⚠️  Agent start failed:', errorText);
+      }
     } catch (agentError) {
       // Log error but don't fail the request - room can still be created
       console.error('⚠️  Failed to start voice agent:', agentError);
@@ -124,6 +159,7 @@ export async function POST() {
         roomUrl: room.url,
         token,
         roomName: room.name,
+        sessionId,
       },
       { status: 200, headers: CORS_HEADERS }
     );

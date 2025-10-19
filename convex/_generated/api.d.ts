@@ -17,6 +17,7 @@ import type * as searchRefinements from "../searchRefinements.js";
 import type * as sessions from "../sessions.js";
 import type * as userPreferences from "../userPreferences.js";
 import type * as voiceCommands from "../voiceCommands.js";
+import type * as voiceSearch from "../voiceSearch.js";
 import type * as voiceSessions from "../voiceSessions.js";
 import type * as voiceTranscripts from "../voiceTranscripts.js";
 
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   sessions: typeof sessions;
   userPreferences: typeof userPreferences;
   voiceCommands: typeof voiceCommands;
+  voiceSearch: typeof voiceSearch;
   voiceSessions: typeof voiceSessions;
   voiceTranscripts: typeof voiceTranscripts;
 }>;

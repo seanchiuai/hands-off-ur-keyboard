@@ -302,5 +302,69 @@ export const getSearchHistory = query({
   },
 });
 
+// Get current active search (most recent) for user
+export const getCurrentActiveSearch = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return null;
+    }
+
+    // Find most recent search (any status)
+    const searches = await ctx.db
+      .query("productSearches")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .order("desc")
+      .take(1);
+
+    return searches[0] || null;
+  },
+});
+
+// Get current active search results with products
+export const getCurrentSearchResults = query({
+  args: {
+    sessionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    // Find most recent search for this session or user
+    let search;
+    if (args.sessionId) {
+      const searches = await ctx.db
+        .query("productSearches")
+        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+        .order("desc")
+        .take(1);
+      search = searches[0];
+    } else {
+      const searches = await ctx.db
+        .query("productSearches")
+        .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+        .order("desc")
+        .take(1);
+      search = searches[0];
+    }
+
+    if (!search) {
+      return [];
+    }
+
+    // Get all products for this search, ordered by number
+    const products = await ctx.db
+      .query("searchProducts")
+      .withIndex("by_search", (q) => q.eq("searchId", search._id))
+      .collect();
+
+    // Sort by number
+    return products.sort((a, b) => a.number - b.number);
+  },
+});
+
 // Import for internal API calls
 import { api } from "./_generated/api";

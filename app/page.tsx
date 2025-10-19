@@ -5,13 +5,13 @@ import { SignUpButton, SignInButton } from "@clerk/nextjs";
 import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import VoiceMicButton from "@/components/VoiceMicButton";
-import ProductGrid from "@/components/ProductGrid";
+import SearchProductGrid from "@/components/SearchProductGrid";
 import PreferenceList from "@/components/PreferenceList";
 import VoiceTranscriptPanel from "@/components/VoiceTranscriptPanel";
+import { VoiceProductManager } from "@/components/VoiceProductManager";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Package } from "lucide-react";
+import { Package, Mic } from "lucide-react";
 
 export default function Home() {
   return (
@@ -28,10 +28,8 @@ export default function Home() {
 
 function VoiceShoppingDashboard() {
   const { user } = useUser();
-  const activeSession = useQuery(api.sessions.getActiveSession);
-  const preferences = useQuery(api.userPreferences.getUserPreferences,
-    user ? { userId: user.id } : "skip"
-  );
+  const activeSearch = useQuery(api.productSearch.getCurrentActiveSearch);
+  const preferences = useQuery(api.userPreferences.getUserPreferences, user ? {} : "skip");
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
@@ -63,7 +61,7 @@ function VoiceShoppingDashboard() {
           {/* Main Column - Voice & Products */}
           <div className="lg:col-span-3 space-y-6">
             {/* Preference Tags */}
-            {preferences && preferences.length > 0 && (
+            {preferences && preferences.preferences.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
                 <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                   Your Preferences
@@ -75,35 +73,54 @@ function VoiceShoppingDashboard() {
             {/* Voice Microphone Button */}
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-xl border border-purple-200 dark:border-purple-800 p-8">
               <div className="text-center space-y-4">
-                <VoiceMicButton />
+                <div className="flex justify-center">
+                  <button
+                    className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 flex items-center justify-center shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-110"
+                    aria-label="Start voice shopping"
+                  >
+                    <Mic className="w-12 h-12 text-white" />
+                  </button>
+                </div>
                 <div className="max-w-md mx-auto">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Click the microphone and describe what you're looking for
+                    Click the microphone and describe what you&apos;re looking for
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                    Try: "Find wireless headphones under $100" or "wooden desk at least 3 feet"
+                    Try: &quot;Find wireless headphones under $100&quot; or &quot;wooden desk at least 3 feet&quot;
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Product Grid */}
-            {activeSession && (
+            {/* Voice Product Management */}
+            <VoiceProductManager />
+
+            {/* Product Grid - Real-time search results */}
+            {activeSearch && (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    Products
+                    Products Found
                   </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Say "save product 3" to save items
-                  </p>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    <span className="mr-2">Say &quot;save product 3&quot; to save items</span>
+                    {activeSearch.status === "searching" && (
+                      <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400">
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Searching...
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <ProductGrid sessionId={activeSession._id} />
+                <SearchProductGrid searchId={activeSearch._id} />
               </div>
             )}
 
             {/* Empty State */}
-            {!activeSession && (
+            {!activeSearch && (
               <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12">
                 <div className="text-center max-w-md mx-auto space-y-4">
                   <div className="w-16 h-16 mx-auto bg-gradient-to-br from-purple-400 to-blue-500 rounded-full flex items-center justify-center">
@@ -115,8 +132,13 @@ function VoiceShoppingDashboard() {
                     Start Voice Shopping
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Click the microphone above and tell me what you're looking for. Products will appear here as I find them.
+                    Click the microphone above and tell me what you&apos;re looking for. Products will appear here as I find them.
                   </p>
+                  <div className="pt-4">
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      Products will be numbered 1-20 for easy voice reference
+                    </p>
+                  </div>
                 </div>
               </div>
             )}

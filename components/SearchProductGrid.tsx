@@ -29,8 +29,8 @@ export default function SearchProductGrid({ searchId }: SearchProductGridProps) 
   if (products === undefined) {
     // Loading state with skeletons
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        {[1, 2, 3, 4, 5].map((i) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {[1, 2, 3, 4].map((i) => (
           <ProductSkeleton key={i} />
         ))}
       </div>
@@ -41,14 +41,14 @@ export default function SearchProductGrid({ searchId }: SearchProductGridProps) 
     return (
       <div className="text-center py-12 bg-muted/50 rounded-lg">
         <p className="text-muted-foreground">
-          No products found. Try a different search query.
+          No products found yet. Start speaking to discover products!
         </p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       <AnimatePresence mode="popLayout">
         {products.map((product, index) => (
           <motion.div
@@ -71,6 +71,7 @@ export default function SearchProductGrid({ searchId }: SearchProductGridProps) 
               imageUrl={product.imageUrl}
               productUrl={product.productUrl}
               source={product.source}
+              productId={product._id}
               details={product.details || {}}
             />
           </motion.div>

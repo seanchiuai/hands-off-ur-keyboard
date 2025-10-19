@@ -8,7 +8,7 @@ import { Loader2, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 
-export function PreferenceList() {
+export default function PreferenceList() {
   const preferencesData = useQuery(api.userPreferences.getUserPreferences, {});
   const deletePreference = useMutation(api.userPreferences.deletePreference);
 

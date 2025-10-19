@@ -58,6 +58,7 @@ export default function ProductGrid({ sessionId }: ProductGridProps) {
               description={product.description}
               vendor={product.vendor}
               externalUrl={product.externalUrl}
+              productId={product._id}
             />
           </motion.div>
         ))}

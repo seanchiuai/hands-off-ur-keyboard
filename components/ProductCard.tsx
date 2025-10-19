@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Check } from "lucide-react";
 
 interface ProductCardProps {
   number: number;
@@ -11,6 +14,7 @@ interface ProductCardProps {
   description: string;
   vendor?: string;
   externalUrl?: string;
+  productId?: string;
 }
 
 export default function ProductCard({
@@ -21,15 +25,29 @@ export default function ProductCard({
   description,
   vendor,
   externalUrl,
+  productId,
 }: ProductCardProps) {
   const [imageError, setImageError] = useState(false);
 
+  // Check if product is saved
+  const isSaved = useQuery(
+    api.products.isProductSaved,
+    productId ? { productId } : "skip"
+  );
+
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 relative">
+    <div className={`bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-all duration-300 relative ${isSaved ? 'ring-2 ring-green-500' : ''}`}>
       {/* Product number badge */}
-      <div className="absolute top-4 left-4 bg-purple-600 text-white rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg z-10 shadow-lg">
+      <div className={`absolute top-4 left-4 rounded-full w-10 h-10 flex items-center justify-center font-bold text-lg z-10 shadow-lg ${isSaved ? 'bg-green-600' : 'bg-purple-600'} text-white`}>
         {number}
       </div>
+
+      {/* Saved indicator badge */}
+      {isSaved && (
+        <div className="absolute top-4 right-4 bg-green-600 text-white rounded-full w-8 h-8 flex items-center justify-center z-10 shadow-lg animate-in fade-in zoom-in duration-300">
+          <Check className="w-5 h-5" />
+        </div>
+      )}
 
       {/* Product image */}
       <div className="relative h-64 bg-gray-100">

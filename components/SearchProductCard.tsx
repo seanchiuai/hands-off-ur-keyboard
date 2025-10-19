@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Star } from "lucide-react";
+import { ExternalLink, Star, Check } from "lucide-react";
 
 interface SearchProductCardProps {
   number: number;
@@ -15,6 +17,7 @@ interface SearchProductCardProps {
   imageUrl?: string;
   productUrl: string;
   source: string;
+  productId?: string;
   details: {
     rating?: number;
     reviewCount?: number;
@@ -32,10 +35,17 @@ export default function SearchProductCard({
   imageUrl,
   productUrl,
   source,
+  productId,
   details,
 }: SearchProductCardProps) {
   const [imageError, setImageError] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  // Check if product is saved
+  const isSaved = useQuery(
+    api.products.isProductSaved,
+    productId ? { productId } : "skip"
+  );
 
   const formatPrice = (price: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
@@ -45,11 +55,18 @@ export default function SearchProductCard({
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow duration-300 relative">
-      {/* Product number badge - prominent for voice reference */}
-      <div className="absolute top-3 left-3 bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl z-10 shadow-lg">
+    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-300 relative ${isSaved ? 'ring-2 ring-green-500' : ''}`}>
+      {/* Product number badge - PROMINENT for voice reference (1-20) */}
+      <div className={`absolute top-3 left-3 rounded-full w-14 h-14 flex items-center justify-center font-bold text-2xl z-10 shadow-2xl border-4 border-white dark:border-gray-800 ${isSaved ? 'bg-gradient-to-br from-green-600 to-green-700' : 'bg-gradient-to-br from-purple-600 to-blue-600'} text-white`}>
         {number}
       </div>
+
+      {/* Saved indicator badge */}
+      {isSaved && (
+        <div className="absolute top-3 right-3 bg-green-600 text-white rounded-full w-10 h-10 flex items-center justify-center z-10 shadow-lg animate-in fade-in zoom-in duration-300">
+          <Check className="w-6 h-6" />
+        </div>
+      )}
 
       {/* Product image */}
       <div className="relative h-56 bg-muted">

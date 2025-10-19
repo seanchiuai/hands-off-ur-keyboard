@@ -1,20 +1,19 @@
 "use client";
 
 import { useUser } from "@clerk/nextjs";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft, Package, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import Image from "next/image";
+import { toast } from "sonner";
 
 export default function SavedProductsPage() {
   const { user, isLoaded } = useUser();
-  const savedProducts = useQuery(
-    api.products.getSavedProducts,
-    user ? { userId: user.id } : "skip"
-  );
+  const savedProducts = useQuery(api.products.getUserSavedProducts);
+  const removeProductById = useMutation(api.products.removeProductById);
 
   if (!isLoaded) {
     return (
@@ -91,7 +90,7 @@ export default function SavedProductsPage() {
                 No Saved Products Yet
               </h2>
               <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-                Start shopping with voice on the main dashboard, then say "save product 3" to save items here.
+                Start shopping with voice on the main dashboard, then say &quot;save product 3&quot; to save items here.
               </p>
               <Link href="/">
                 <Button className="mt-4">
@@ -105,7 +104,7 @@ export default function SavedProductsPage() {
           <div>
             <div className="mb-6 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <p className="text-sm text-blue-900 dark:text-blue-100">
-                <strong>💬 Voice Tip:</strong> Say "remove product 3" while on this page to remove items from your saved list.
+                <strong>💬 Voice Tip:</strong> Say &quot;remove product 3&quot; while on this page to remove items from your saved list.
               </p>
             </div>
 
@@ -121,6 +120,15 @@ export default function SavedProductsPage() {
                         </span>
                       </div>
                       <button
+                        onClick={async () => {
+                          try {
+                            await removeProductById({ productId: savedProduct.productId });
+                            toast.success(`${savedProduct.productName} removed from saved products`);
+                          } catch (error) {
+                            toast.error("Failed to remove product");
+                            console.error(error);
+                          }
+                        }}
                         className="p-2 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
                         aria-label="Remove product"
                       >
@@ -160,7 +168,7 @@ export default function SavedProductsPage() {
                         </p>
                         {savedProduct.voiceCommand && (
                           <p className="text-xs text-gray-400 dark:text-gray-500 italic mt-1">
-                            "{savedProduct.voiceCommand}"
+                            &quot;{savedProduct.voiceCommand}&quot;
                           </p>
                         )}
                       </div>

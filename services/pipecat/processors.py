@@ -11,13 +11,9 @@ import time
 import httpx
 from typing import Any, Dict, Optional
 
-try:
-    from pipecat.processors.frame_processor import FrameProcessor
-    from pipecat.frames.frames import LLMMessagesFrame, FunctionCallFrame
-except ImportError:
-    print("Error: PipeCat not installed. Run: pip install pipecat-ai")
-    import sys
-    sys.exit(1)
+# PipeCat 0.0.90 imports
+from pipecat.processors.frame_processor import FrameProcessor
+from pipecat.frames.frames import LLMMessagesFrame, Frame
 
 
 class ProductSearchProcessor(FrameProcessor):
@@ -36,68 +32,12 @@ class ProductSearchProcessor(FrameProcessor):
         self.session_id = session_id
         self.convex_url = convex_url.rstrip('/')
 
-    async def process_frame(self, frame):
+    async def process_frame(self, frame, direction):
         """Process frames looking for search_products function calls."""
 
-        # Check if LLM called search_products function
-        if isinstance(frame, FunctionCallFrame):
-            if frame.function_name == "search_products":
-                print(f"Product search triggered: {frame.arguments}")
-
-                # Extract product attributes from function args
-                attributes = frame.arguments
-
-                try:
-                    # Call Convex mutation to search products
-                    async with httpx.AsyncClient() as client:
-                        response = await client.post(
-                            f"{self.convex_url}/searchProducts",
-                            json={
-                                "userId": self.user_id,
-                                "sessionId": self.session_id,
-                                "attributes": attributes,
-                            },
-                            headers={
-                                "Content-Type": "application/json",
-                            },
-                            timeout=10.0,
-                        )
-
-                        if response.status_code == 200:
-                            results = response.json()
-                            print(f"Search results: {len(results.get('products', []))} products found")
-
-                            # Return results to LLM for natural language response
-                            return LLMMessagesFrame([
-                                {
-                                    "role": "function",
-                                    "name": "search_products",
-                                    "content": str(results),
-                                }
-                            ])
-                        else:
-                            print(f"Search failed: {response.status_code} - {response.text}")
-                            # Return error to LLM
-                            return LLMMessagesFrame([
-                                {
-                                    "role": "function",
-                                    "name": "search_products",
-                                    "content": "Sorry, I couldn't search for products right now. Please try again.",
-                                }
-                            ])
-
-                except Exception as e:
-                    print(f"Error calling Convex search: {e}")
-                    # Return error to LLM
-                    return LLMMessagesFrame([
-                        {
-                            "role": "function",
-                            "name": "search_products",
-                            "content": "Sorry, I encountered an error while searching. Please try again.",
-                        }
-                    ])
-
-        # Pass through other frames unchanged
+        # For now, just pass through frames - function calling to be added later
+        # TODO: Implement Gemini function calling for product search
+        await self.push_frame(frame, direction)
         return frame
 
 
@@ -145,7 +85,7 @@ class ConversationLogger(FrameProcessor):
         except Exception as e:
             print(f"Error logging to Convex: {e}")
 
-    async def process_frame(self, frame):
+    async def process_frame(self, frame, direction):
         """Process frames and log conversation turns."""
 
         # Log LLM messages to Convex
@@ -178,4 +118,6 @@ class ConversationLogger(FrameProcessor):
 
                 print(f"Logged {speaker} message: {content[:100]}...")
 
+        # Pass frame through
+        await self.push_frame(frame, direction)
         return frame

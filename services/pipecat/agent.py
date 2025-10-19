@@ -1,20 +1,18 @@
 """
-PipeCat Voice Agent for Real-time Voice Shopping
+PipeCat Voice Agent for Real-time Voice Shopping - PipeCat 0.0.90
 
 This agent connects Daily's WebRTC audio transport to Gemini Live API
 for natural voice conversations about product shopping.
 
 Requirements:
-- pipecat-ai
-- daily-python
-- google-generativeai
+- pipecat-ai[google,daily]
 - httpx
 
 Environment Variables:
 - DAILY_ROOM_URL: Daily room URL to join
 - DAILY_TOKEN: Daily meeting token
 - GEMINI_API_KEY: Gemini API key
-- CONVEX_URL: Convex deployment URL (use .convex.site for HTTP endpoints)
+- CONVEX_URL: Convex deployment URL
 - USER_ID: Clerk user ID
 - SESSION_ID: Convex voice session ID
 """
@@ -22,18 +20,15 @@ Environment Variables:
 import asyncio
 import os
 import sys
-from typing import Optional
+from loguru import logger
 
-try:
-    from pipecat.pipeline.pipeline import Pipeline
-    from pipecat.pipeline.task import PipelineTask
-    from pipecat.processors.aggregators.llm_response import LLMResponseAggregator
-    from pipecat.transports.services.daily import DailyTransport, DailyParams
-    from pipecat.services.gemini import GeminiLLMService
-    from pipecat.frames.frames import LLMMessagesFrame
-except ImportError:
-    print("Error: PipeCat not installed. Run: pip install pipecat-ai daily-python")
-    sys.exit(1)
+# PipeCat 0.0.90 imports
+from pipecat.pipeline.pipeline import Pipeline
+from pipecat.pipeline.runner import PipelineRunner
+from pipecat.pipeline.task import PipelineTask
+from pipecat.transports.daily.transport import DailyTransport, DailyParams
+from pipecat.adapters.services.gemini_adapter import GeminiLLMAdapter
+from pipecat.frames.frames import LLMMessagesFrame, EndFrame
 
 # Import custom processors
 from processors import ProductSearchProcessor, ConversationLogger
@@ -59,7 +54,7 @@ async def create_voice_agent(
         convex_url: Convex deployment URL
     """
 
-    print(f"Initializing voice agent for user {user_id}...")
+    logger.info(f"Initializing voice agent for user {user_id}...")
 
     # Initialize Daily transport for WebRTC audio
     transport = DailyTransport(
@@ -72,32 +67,26 @@ async def create_voice_agent(
             video_out_enabled=False,  # Audio-only
             vad_enabled=True,  # Use Daily's built-in VAD
             vad_analyzer=DailyParams.VadAnalyzerType.SILERO,
+            vad_audio_passthrough=True,
         ),
     )
 
-    print("Daily transport initialized")
+    logger.info("Daily transport initialized")
 
-    # Initialize Gemini Live API service
-    gemini_service = GeminiLLMService(
-        api_key=gemini_api_key,
-        model="gemini-2.0-flash-exp",  # Latency-optimized
-        params={
-            "temperature": 0.7,
-            "max_output_tokens": 500,  # Keep responses concise for voice
-        },
-    )
+    # Initialize Gemini adapter
+    gemini = GeminiLLMAdapter(api_key=gemini_api_key)
 
-    print("Gemini service initialized")
+    logger.info("Gemini adapter initialized")
 
     # System prompt for shopping assistant
-    system_prompt = """You are a helpful voice shopping assistant.
+    system_instruction = """You are a helpful voice shopping assistant.
 Users will describe products they want to buy. Your job is to:
 1. Ask clarifying questions about product preferences
 2. Extract key product attributes (category, color, size, price range, etc.)
-3. Confirm understanding before searching
+3. Help users find the perfect products
 
 Keep responses natural and conversational. Speak concisely - aim for 2-3 sentences.
-When you have enough information, use the search_products function."""
+Be friendly and helpful!"""
 
     # Custom processor for extracting product search intents
     product_processor = ProductSearchProcessor(
@@ -109,30 +98,26 @@ When you have enough information, use the search_products function."""
         user_id=user_id, session_id=session_id, convex_url=convex_url
     )
 
-    # LLM response aggregator for handling streaming responses
-    aggregator = LLMResponseAggregator()
-
-    # Build pipeline: Audio → Gemini → Product Search → Logger → Audio
+    # Build pipeline: Transport → Gemini → Processors → Transport
     pipeline = Pipeline(
         [
-            transport.input_processor(),  # Daily audio input
-            gemini_service,  # Gemini Live API
-            aggregator,  # Aggregate streaming responses
+            transport.input(),  # Daily audio input
+            gemini,  # Gemini Live API
             product_processor,  # Extract product intents
             conversation_logger,  # Log to Convex
-            transport.output_processor(),  # Daily audio output
+            transport.output(),  # Daily audio output
         ]
     )
 
-    print("Pipeline built")
+    logger.info("Pipeline built")
 
     # Create pipeline task
     task = PipelineTask(pipeline)
 
-    # Set initial context
-    await task.queue_frames([LLMMessagesFrame([{"role": "system", "content": system_prompt}])])
+    # Set initial context with system instruction
+    await task.queue_frame(LLMMessagesFrame([{"role": "system", "content": system_instruction}]))
 
-    print("Agent ready, joining Daily room...")
+    logger.info("Agent ready, joining Daily room...")
 
     return transport, task
 
@@ -160,7 +145,7 @@ async def main():
 
     missing_vars = [name for name, value in required_vars.items() if not value]
     if missing_vars:
-        print(f"Error: Missing required environment variables: {', '.join(missing_vars)}")
+        logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")
         sys.exit(1)
 
     try:
@@ -174,25 +159,25 @@ async def main():
             convex_url=convex_url,
         )
 
-        print("Voice agent started successfully")
+        logger.info("Voice agent started successfully")
 
-        # Run the pipeline
-        await task.run()
+        # Create and run the pipeline runner
+        runner = PipelineRunner()
+        await runner.run(task)
 
     except KeyboardInterrupt:
-        print("\nShutting down voice agent...")
+        logger.info("Shutting down voice agent...")
     except Exception as e:
-        print(f"Agent error: {e}")
+        logger.error(f"Agent error: {e}")
         import traceback
-
         traceback.print_exc()
     finally:
-        print("Cleaning up...")
-        if "transport" in locals():
-            await transport.cleanup()
-        print("Agent stopped")
+        logger.info("Cleaning up...")
+        if "task" in locals():
+            await task.queue_frame(EndFrame())
+        logger.info("Agent stopped")
 
 
 if __name__ == "__main__":
-    print("Starting PipeCat Voice Agent...")
+    logger.info("Starting PipeCat Voice Agent...")
     asyncio.run(main())

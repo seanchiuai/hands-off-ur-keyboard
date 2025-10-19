@@ -3,6 +3,7 @@
 import { useSavedProducts } from "@/hooks/useSavedProducts";
 import { X, Mic, Mouse } from "lucide-react";
 import { useState } from "react";
+import Image from "next/image";
 
 export const SavedProductsList = () => {
   const { savedProducts, removeProductById } = useSavedProducts();
@@ -51,9 +52,11 @@ export const SavedProductsList = () => {
           >
             {/* Product Image */}
             {product.productDetails && (
-              <img
+              <Image
                 src={product.productDetails.imageUrl}
                 alt={product.productName}
+                width={64}
+                height={64}
                 className="w-16 h-16 object-cover rounded-md border border-gray-200 dark:border-gray-700"
               />
             )}

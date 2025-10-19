@@ -71,7 +71,7 @@ export default function SearchProductGrid({ searchId }: SearchProductGridProps) 
               imageUrl={product.imageUrl}
               productUrl={product.productUrl}
               source={product.source}
-              details={product.details}
+              details={product.details || {}}
             />
           </motion.div>
         ))}

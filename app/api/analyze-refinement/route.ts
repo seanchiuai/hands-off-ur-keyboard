@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
@@ -11,10 +11,11 @@ const refinementFunctions = [
     description:
       "Refine the current product search based on user request for changes",
     parameters: {
-      type: "object" as const,
+      type: SchemaType.OBJECT,
       properties: {
         refinementType: {
-          type: "string" as const,
+          type: SchemaType.STRING,
+          format: "enum" as const,
           enum: [
             "price_lower",
             "price_higher",
@@ -27,19 +28,19 @@ const refinementFunctions = [
           description: "Type of refinement requested",
         },
         refinementValue: {
-          type: "string" as const,
+          type: SchemaType.STRING,
           description:
             "Specific value for the refinement (e.g., price amount, feature name, size specification)",
         },
         targetPercentage: {
-          type: "number" as const,
+          type: SchemaType.NUMBER,
           description:
             "For price refinements, percentage change requested (e.g., 20 for 20% cheaper)",
         },
         extractedPreferences: {
-          type: "array" as const,
+          type: SchemaType.ARRAY,
           items: {
-            type: "string" as const,
+            type: SchemaType.STRING,
           },
           description: "List of preference tags extracted from the refinement request",
         },
@@ -76,7 +77,8 @@ export async function POST(req: NextRequest) {
 
     const model = genAI.getGenerativeModel({
       model: "gemini-2.0-flash-exp",
-      tools: [{ functionDeclarations: refinementFunctions }],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      tools: [{ functionDeclarations: refinementFunctions as any }],
     });
 
     const prompt = `You are analyzing a user's voice command to determine if they want to refine their product search.
@@ -112,13 +114,20 @@ Determine if this is a refinement request and call the appropriate function with
       });
     }
 
+    const args = functionCall.args as {
+      refinementType: string;
+      refinementValue: string;
+      targetPercentage?: number;
+      extractedPreferences?: string[];
+    };
+
     return NextResponse.json({
       isRefinement: true,
       refinement: {
-        type: functionCall.args.refinementType,
-        value: functionCall.args.refinementValue,
-        targetPercentage: functionCall.args.targetPercentage,
-        extractedPreferences: functionCall.args.extractedPreferences || [],
+        type: args.refinementType,
+        value: args.refinementValue,
+        targetPercentage: args.targetPercentage,
+        extractedPreferences: args.extractedPreferences || [],
       },
     });
   } catch (error) {

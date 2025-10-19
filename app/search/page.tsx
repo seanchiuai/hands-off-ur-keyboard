@@ -77,7 +77,7 @@ export default function SearchPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">Product Search</h1>
           <p className="text-muted-foreground">
-            Search for products using natural language. Tell us what you're looking for!
+            Search for products using natural language. Tell us what you&apos;re looking for!
           </p>
         </div>
 
@@ -86,7 +86,7 @@ export default function SearchPage() {
           <CardHeader>
             <CardTitle>What are you looking for?</CardTitle>
             <CardDescription>
-              Try something like "wooden desk under $200" or "wireless headphones with noise cancellation"
+              Try something like &quot;wooden desk under $200&quot; or &quot;wireless headphones with noise cancellation&quot;
             </CardDescription>
           </CardHeader>
           <CardContent>

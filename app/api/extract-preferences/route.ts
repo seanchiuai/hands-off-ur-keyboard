@@ -85,7 +85,8 @@ export async function POST(req: NextRequest) {
       model: "gemini-2.0-flash-exp",
       generationConfig: {
         responseMimeType: "application/json",
-        responseSchema: preferenceSchema,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        responseSchema: preferenceSchema as any,
       },
     });
 

@@ -7,14 +7,12 @@ export default async function ServerPage() {
   let data;
 
   try {
-    preloaded = await preloadQuery(api.myFunctions.listNumbers, {
-      count: 3,
-    });
+    preloaded = await preloadQuery(api.sessions.getActiveSession);
     data = preloadedQueryResult(preloaded);
   } catch {
     // Handle case when Convex is not available during build
     preloaded = null;
-    data = { viewer: null, numbers: [] };
+    data = null;
   }
 
   return (

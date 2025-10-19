@@ -1,0 +1,19 @@
+# PipeCat Voice Agent Dependencies
+
+# Core PipeCat framework
+pipecat-ai>=0.0.1
+
+# Daily WebRTC transport
+daily-python>=0.9.0
+
+# Gemini API integration
+google-generativeai>=0.3.0
+
+# HTTP client for Convex integration
+httpx>=0.25.0
+
+# WebSocket support
+websockets>=12.0
+
+# Environment variable management
+python-dotenv>=1.0.0

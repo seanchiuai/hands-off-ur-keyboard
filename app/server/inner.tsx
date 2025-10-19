@@ -6,10 +6,10 @@ import { api } from "../../convex/_generated/api";
 export default function Home({
   preloaded,
 }: {
-  preloaded: Preloaded<typeof api.myFunctions.listNumbers>;
+  preloaded: Preloaded<typeof api.sessions.getActiveSession>;
 }) {
   const data = usePreloadedQuery(preloaded);
-  const addNumber = useMutation(api.myFunctions.addNumber);
+  const createSession = useMutation(api.sessions.createSession);
   return (
     <>
       <div className="flex flex-col gap-4 bg-card p-4 rounded-md border border-border">
@@ -21,10 +21,10 @@ export default function Home({
       <button
         className="bg-primary text-primary-foreground px-4 py-2 rounded-md mx-auto"
         onClick={() => {
-          void addNumber({ value: Math.floor(Math.random() * 10) });
+          void createSession();
         }}
       >
-        Add a random number
+        Create a session
       </button>
     </>
   );

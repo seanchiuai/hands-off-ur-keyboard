@@ -42,11 +42,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npx convex dev` - Start Convex development server (auto-started with `npm run dev`)
 - `npx convex deploy` - Deploy Convex functions to production
 
-### Run/Execution Policy
-- Only run `npm run dev` for brief, self-contained testing.
-- Do not leave servers running after tests complete; stop them immediately.
-- If a server must be started to verify behavior, terminate it before ending the turn.
-
 ## Architecture
 
 This is a full-stack TypeScript application using:
@@ -92,7 +87,8 @@ This is a full-stack TypeScript application using:
 
 ## Debugging
 - ALWAYS, call the context7 mcp for debugging errors or when the user complains of a feature that is not working even thought the code is implemented.
-- If the first attempt does not work after using context7, create a query for the research agent with sufficient project and error context to find information to fix it. The user will report back with the results, then continue to implement the fix.
+- If the user requests a research query, create a markdown file with sufficient context about the error and the project 
+to find informationIf the first attempt does not work after using context7, create a query for the research agent with sufficient project and error context to find information to fix it. The user will report back with the results, then continue to implement the fix.
 
 ## Authentication & Security
 - Protected routes using Clerk's authentication in middleware.ts

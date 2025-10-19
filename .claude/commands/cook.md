@@ -6,7 +6,7 @@ argument-hint: []
 
 # Command: /cook
 
-Before you start, ensure there are existing markdown files in `/spec`, `/plans`, and `/agents`. After confirming this, execute all the plans located in the `/plans` folder using the specs provided in `/spec`.
+Before you start, ensure there are existing markdown files in `/plans` and `/agents`. After confirming this, execute all the plans located in the `/plans` folder.
 
 For each plan:
 1. Identify the corresponding agent from the `/agents` folder required to execute the plan.

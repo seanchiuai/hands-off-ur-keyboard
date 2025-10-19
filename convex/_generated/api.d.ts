@@ -8,8 +8,17 @@
  * @module
  */
 
-import type * as myFunctions from "../myFunctions.js";
-import type * as todos from "../todos.js";
+import type * as brightdata from "../brightdata.js";
+import type * as productSearch from "../productSearch.js";
+import type * as products from "../products.js";
+import type * as searchCache from "../searchCache.js";
+import type * as searchProducts from "../searchProducts.js";
+import type * as searchRefinements from "../searchRefinements.js";
+import type * as sessions from "../sessions.js";
+import type * as userPreferences from "../userPreferences.js";
+import type * as voiceCommands from "../voiceCommands.js";
+import type * as voiceSessions from "../voiceSessions.js";
+import type * as voiceTranscripts from "../voiceTranscripts.js";
 
 import type {
   ApiFromModules,
@@ -26,8 +35,17 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  myFunctions: typeof myFunctions;
-  todos: typeof todos;
+  brightdata: typeof brightdata;
+  productSearch: typeof productSearch;
+  products: typeof products;
+  searchCache: typeof searchCache;
+  searchProducts: typeof searchProducts;
+  searchRefinements: typeof searchRefinements;
+  sessions: typeof sessions;
+  userPreferences: typeof userPreferences;
+  voiceCommands: typeof voiceCommands;
+  voiceSessions: typeof voiceSessions;
+  voiceTranscripts: typeof voiceTranscripts;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

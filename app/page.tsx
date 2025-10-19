@@ -23,14 +23,14 @@ function RedirectToDashboard() {
   const router = useRouter();
 
   useEffect(() => {
-    router.push('/tasks');
+    router.push('/shop');
   }, [router]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center">
         <span className="text-xl font-mona-bold">VIBED</span>
-        <p className="text-muted-foreground mt-2">Redirecting to tasks...</p>
+        <p className="text-muted-foreground mt-2">Redirecting to shop...</p>
       </div>
     </div>
   );
@@ -39,8 +39,8 @@ function RedirectToDashboard() {
 function SignInForm() {
   return (
     <div className="max-w-md mx-auto text-center">
-      <h1 className="text-3xl font-mona-heading mb-2">Welcome to VIBED</h1>
-      <p className="text-muted-foreground mb-8">Sign in to start organizing your tasks</p>
+      <h1 className="text-3xl font-mona-heading mb-2">Welcome to Hands Off Ur Keyboard</h1>
+      <p className="text-muted-foreground mb-8">Sign in to start voice shopping</p>
       <div className="flex flex-col gap-3">
         <SignInButton mode="modal">
           <button className="w-full px-4 py-2.5 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity">

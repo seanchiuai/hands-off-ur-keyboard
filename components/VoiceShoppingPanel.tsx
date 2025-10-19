@@ -1,9 +1,9 @@
 "use client";
 
 import { Id } from "@/convex/_generated/dataModel";
-import { VoiceTranscriptPanel } from "./VoiceTranscriptPanel";
+import VoiceTranscriptPanel from "./VoiceTranscriptPanel";
 import { PreferenceExtractor } from "./PreferenceExtractor";
-import { PreferenceList } from "./PreferenceList";
+import PreferenceList from "./PreferenceList";
 
 interface VoiceShoppingPanelProps {
   sessionId: Id<"voiceSessions">;
@@ -29,7 +29,7 @@ export function VoiceShoppingPanel({ sessionId }: VoiceShoppingPanelProps) {
       </div>
 
       {/* Transcript panel */}
-      <VoiceTranscriptPanel sessionId={sessionId} />
+      <VoiceTranscriptPanel />
     </div>
   );
 }

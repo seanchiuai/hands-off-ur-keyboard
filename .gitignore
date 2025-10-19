@@ -48,3 +48,6 @@ package-lock.json
 
 # PipeCat voice agent (Python server with secrets)
 /pipecat-voice-agent/
+
+# PipeCat example files (for testing and reference only)
+/pipecat-voice-agent-example/

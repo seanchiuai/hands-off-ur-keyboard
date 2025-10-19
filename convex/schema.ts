@@ -17,6 +17,7 @@ export default defineSchema({
     metadata: v.optional(v.object({
       duration: v.optional(v.number()),
       errorMessage: v.optional(v.string()),
+      autoEnded: v.optional(v.boolean()),
     })),
   })
     .index("by_user", ["userId"])

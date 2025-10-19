@@ -17,8 +17,7 @@ interface SearchProductsGridProps {
 export default function SearchProductsGrid({ searchId }: SearchProductsGridProps) {
   const { user } = useUser();
   const products = useQuery(api.searchProducts.getSearchResults, { searchId });
-  const search = useQuery(api.productSearch.getSearch, { searchId });
-  const saveProduct = useMutation(api.savedProducts.saveProduct);
+  const saveProduct = useMutation(api.products.saveProduct);
   const [savingProductId, setSavingProductId] = useState<string | null>(null);
 
   // Handle saving a product
@@ -28,15 +27,8 @@ export default function SearchProductsGrid({ searchId }: SearchProductsGridProps
     try {
       setSavingProductId(product._id);
       await saveProduct({
-        userId: user.id,
         productId: product._id,
         productNumber: product.number,
-        productName: product.title,
-        productDetails: {
-          imageUrl: product.imageUrl || "",
-          price: product.price,
-          category: search?.parameters?.category || "general",
-        },
         savedVia: "click",
       });
     } catch (error) {
@@ -157,13 +149,6 @@ export default function SearchProductsGrid({ searchId }: SearchProductsGridProps
                     <span className="text-sm text-green-600 dark:text-green-400">
                       {product.details.availability}
                     </span>
-                  </div>
-                )}
-
-                {/* Brand */}
-                {product.details?.brand && (
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Brand: <span className="font-medium">{product.details.brand}</span>
                   </div>
                 )}
 

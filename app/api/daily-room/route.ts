@@ -97,6 +97,27 @@ export async function POST() {
 
     const { token } = await tokenResponse.json();
 
+    // Start PipeCat voice agent
+    try {
+      const orchestratorUrl = process.env.PIPECAT_ORCHESTRATOR_URL || 'http://localhost:8000';
+      await fetch(`${orchestratorUrl}/start-agent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          room_url: room.url,
+          token: token,
+          session_id: room.name, // We'll use room name as session ID
+          user_id: userId,
+        }),
+      });
+      console.log('✅ Voice agent started for room:', room.name);
+    } catch (agentError) {
+      // Log error but don't fail the request - room can still be created
+      console.error('⚠️  Failed to start voice agent:', agentError);
+    }
+
     // Return room URL and token
     return NextResponse.json(
       {

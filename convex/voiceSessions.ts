@@ -26,8 +26,17 @@ export const createSession = mutation({
       .filter((q) => q.eq(q.field("status"), "active"))
       .first();
 
+    // If there's an existing active session, end it first
     if (existingSession) {
-      throw new Error("User already has an active voice session");
+      const duration = Date.now() - existingSession.startedAt;
+      await ctx.db.patch(existingSession._id, {
+        status: "ended",
+        endedAt: Date.now(),
+        metadata: {
+          duration,
+          autoEnded: true, // Mark that this was auto-ended
+        },
+      });
     }
 
     // Create new session

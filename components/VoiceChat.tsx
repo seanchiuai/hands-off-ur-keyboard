@@ -4,13 +4,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { DailyProvider } from '@daily-co/daily-react';
 import { useVoiceSession } from '@/hooks/useVoiceSession';
 import { useDailyCall } from '@/hooks/useDailyCall';
-import { VoiceMicButton } from './VoiceMicButton';
-import { VoiceTranscriptPanel } from './VoiceTranscriptPanel';
+import VoiceMicButton from './VoiceMicButton';
+import VoiceTranscriptPanel from './VoiceTranscriptPanel';
 import { Id } from '@/convex/_generated/dataModel';
 
 function VoiceChatInner() {
   const { startSession, endSession, isCreating, error: sessionError } = useVoiceSession();
-  const { joinCall, leaveCall, toggleMic, state } = useDailyCall();
+  const { joinCall, leaveCall, state } = useDailyCall();
   const [currentSessionId, setCurrentSessionId] = useState<Id<'voiceSessions'> | null>(null);
 
   /**
@@ -108,10 +108,7 @@ function VoiceChatInner() {
               </div>
 
               {/* Microphone Button */}
-              <VoiceMicButton
-                isActive={state.isMicActive}
-                onClick={toggleMic}
-              />
+              <VoiceMicButton />
 
               {/* End Chat Button */}
               <button
@@ -126,7 +123,7 @@ function VoiceChatInner() {
 
         {/* Transcript Panel */}
         {currentSessionId && state.isJoined && (
-          <VoiceTranscriptPanel sessionId={currentSessionId} />
+          <VoiceTranscriptPanel />
         )}
 
         {/* Instructions */}

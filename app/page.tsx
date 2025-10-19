@@ -8,10 +8,11 @@ import { api } from "@/convex/_generated/api";
 import SearchProductGrid from "@/components/SearchProductGrid";
 import PreferenceList from "@/components/PreferenceList";
 import VoiceTranscriptPanel from "@/components/VoiceTranscriptPanel";
-import { VoiceProductManager } from "@/components/VoiceProductManager";
+import VoiceMicButton from "@/components/VoiceMicButton";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Package, Mic } from "lucide-react";
+import { Package } from "lucide-react";
 
 export default function Home() {
   return (
@@ -33,6 +34,9 @@ function VoiceShoppingDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+      {/* Connection Status */}
+      <ConnectionStatus />
+
       {/* Header */}
       <header className="border-b border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -70,30 +74,32 @@ function VoiceShoppingDashboard() {
               </div>
             )}
 
-            {/* Voice Microphone Button */}
+            {/* Voice Shopping Interface */}
             <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-xl border border-purple-200 dark:border-purple-800 p-8">
               <div className="text-center space-y-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  Voice Shopping
+                </h2>
                 <div className="flex justify-center">
-                  <button
-                    className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 flex items-center justify-center shadow-2xl hover:shadow-3xl transition-all duration-300 hover:scale-110"
-                    aria-label="Start voice shopping"
-                  >
-                    <Mic className="w-12 h-12 text-white" />
-                  </button>
+                  <VoiceMicButton />
                 </div>
-                <div className="max-w-md mx-auto">
+                <div className="max-w-md mx-auto space-y-2">
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Click the microphone and describe what you&apos;re looking for
+                    Click the microphone to start a conversation
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
-                    Try: &quot;Find wireless headphones under $100&quot; or &quot;wooden desk at least 3 feet&quot;
-                  </p>
+                  <div className="text-xs text-gray-500 dark:text-gray-500 space-y-1">
+                    <p><strong>How it works:</strong></p>
+                    <ol className="list-decimal list-inside text-left space-y-1">
+                      <li>Describe what you want to buy</li>
+                      <li>Browse products as they appear</li>
+                      <li>Ask to save specific products by number</li>
+                      <li>Request more specific features</li>
+                      <li>End the conversation when done</li>
+                    </ol>
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* Voice Product Management */}
-            <VoiceProductManager />
 
             {/* Product Grid - Real-time search results */}
             {activeSearch && (
@@ -103,7 +109,6 @@ function VoiceShoppingDashboard() {
                     Products Found
                   </h2>
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    <span className="mr-2">Say &quot;save product 3&quot; to save items</span>
                     {activeSearch.status === "searching" && (
                       <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400">
                         <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -129,14 +134,17 @@ function VoiceShoppingDashboard() {
                     </svg>
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                    Start Voice Shopping
+                    Ready for Voice Shopping
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
-                    Click the microphone above and tell me what you&apos;re looking for. Products will appear here as I find them.
+                    Click the microphone above to start a conversation with the AI shopping assistant. Just describe what you&apos;re looking for, and products will appear here.
                   </p>
-                  <div className="pt-4">
+                  <div className="pt-4 space-y-2">
                     <p className="text-xs text-gray-500 dark:text-gray-500">
-                      Products will be numbered 1-20 for easy voice reference
+                      You can save products by saying &quot;save product 3&quot; or ask for more specific features during the conversation.
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                      Products will be numbered 1-20 for easy reference.
                     </p>
                   </div>
                 </div>

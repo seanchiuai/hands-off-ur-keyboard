@@ -6,8 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Custom Agents and Plans
 
-**IMPORTANT:** When searching for custom agents or plans, always look under the `/.claude` directory. When creating plans or log of code implementations, always store in the `/.claude` directory.
+**IMPORTANT:** When searching for custom agents or plans, always look under the `/.claude` directory. When creating log and setup files, always store in the `/docs` directory.
 
+Under `/.claude`:
 - **`/agents`** - Contains custom agent definitions for specialized tasks
   - Before implementing features, check if a relevant agent exists in this directory
   - Invoke custom agents using the Task tool when their expertise matches the request
@@ -23,6 +24,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Plans should be named `FEATURE_[FEATURE DESCRIPTION]_IMPLEMENTATION.md`
 
 **IMPORTANT**: Always check these directories when starting a new feature or task. Always use the Context7 MCP to do more research for complicated features before creating and editing a plan. Custom agents, plans, and the spec sheet provide project-specific expertise and tested approaches when available.
+
+Under `/docs`:
+- **`/logs`** - Contains implementation logs tracking what was built
+  - One log per feature named `FEATURE_NAME.md` (uppercase, underscores)
+  - `APP_LOG.md` for cross-cutting changes (schema, auth, routing, dependencies)
+  - Update logs every significant change (new functionality, bug fixes, refactors)
+  - Append to existing logs, don't create dated versions
+  - Format: `### [Date] - [What Changed]` with changes, files affected, and breaking changes
+- **`/setup`** - Contains user-facing setup and configuration guides
+  - Create when features need API keys, credentials, or complex configuration
+  - Update when setup process changes
+  - Guides for external integrations and deployment
 
 ## Commands
 

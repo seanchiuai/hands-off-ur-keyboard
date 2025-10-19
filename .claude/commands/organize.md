@@ -1,5 +1,5 @@
 ---
-description: Organize plan documentation and application routes. Move misplaced feature markdown files into `.claude/plans`, merge duplicate plans inside `.claude/plans`, and detect as well as propose or apply safe merges for hidden or duplicate/similar URL routes.
+description: rerganize implementation logs and application routes. Move misplaced feature markdown files into `/docs/logs`, merge duplicate files, and detect as well as propose or apply safe merges for hidden or duplicate/similar URL routes.
 allowed-tools: Bash, Edit
 argument-hint: []
 ---
@@ -10,8 +10,9 @@ Purpose: Organize plan docs into `/.claude/plans` and reorganize hidden or dupli
 
 Actions
 1) Plans
-   - Look for markdown files describing implementations of features that are not in the `.claude/plans` folder and move them there.
-   - Reorganize plans inside `/.claude/plans` by merging those that describe the same features.
+   - Look for markdown files describing implementations of features that are not in the `/.claude/plans` or `/docs` folder and move them there.
+   - Reorganize scattered plans to `/docs/logs` and `/docs/setup`.
+   - Merge those that describe the same features there is only one file for each feature under `/docs/logs`
    - Rename plan files that don't match this format: `plan-[TITLE].md`.
 
 2) App routes
@@ -21,4 +22,4 @@ Actions
    - Detect duplicate or similar features across URL directories (by route path and page content); when applying, perform safe, non-conflicting merges of overlapping URL routes. Never auto-edit navigation.
 
 Report
-- Summary of moved, renamed, or merged plans, hidden routes, and URL-level duplicates or similarities.
+- Summary of moved, renamed, or merged logs or md files, hidden routes, and URL-level duplicates or similarities.

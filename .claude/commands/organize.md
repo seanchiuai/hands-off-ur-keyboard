@@ -14,6 +14,9 @@ Actions
    - Reorganize scattered plans to `/docs/logs` and `/docs/setup`.
    - Merge those that describe the same features there is only one file for each feature under `/docs/logs`
    - Rename log files that don't match this format: `log-[TITLE].md`.
+   - Reorganize the docs and plans properly.
+   - Delete any logs that are not needed anymore and update its on the status of the current app.
+   - Make sure the logs document show what has been done and hasn't.
 
 2) App routes
    - Live routes: `app/<segment>` with `page.tsx` or `layout.tsx` (exclude `app/_archive`); these map to URL directories.

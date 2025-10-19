@@ -94,9 +94,10 @@ export const getActiveSearch = query({
 
     // If sessionId provided, get most recent search for that session
     if (args.sessionId) {
+      const sessionId = args.sessionId; // Type narrowing
       const search = await ctx.db
         .query("productSearches")
-        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
         .order("desc")
         .first();
 

@@ -45,3 +45,6 @@ package-lock.json
 
 # clerk configuration (can include secrets)
 /.clerk/
+
+# PipeCat voice agent (Python server with secrets)
+/pipecat-voice-agent/

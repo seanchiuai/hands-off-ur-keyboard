@@ -336,9 +336,10 @@ export const getCurrentSearchResults = query({
     // Find most recent search for this session or user
     let search;
     if (args.sessionId) {
+      const sessionId = args.sessionId; // Type narrowing
       const searches = await ctx.db
         .query("productSearches")
-        .withIndex("by_session", (q) => q.eq("sessionId", args.sessionId))
+        .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
         .order("desc")
         .take(1);
       search = searches[0];

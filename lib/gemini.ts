@@ -29,7 +29,7 @@ export const createVoiceCommandModel = () => {
   const genAI = getGeminiClient();
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-exp",
+    model: "gemini-1.5-flash",
     systemInstruction: SYSTEM_INSTRUCTION,
     generationConfig: {
       temperature: 0.1, // Low temperature for deterministic command extraction
@@ -95,10 +95,19 @@ export const processVoiceCommand = async (audioBlob: Blob): Promise<{
     });
 
     const response = result.response;
+
+    // Debug logging
+    console.log("Gemini response:", {
+      text: response.text(),
+      functionCalls: response.functionCalls(),
+      candidates: response.candidates,
+    });
+
     const functionCall = response.functionCalls()?.[0];
 
     if (!functionCall || functionCall.name !== "executeProductCommand") {
-      throw new Error("Could not extract product command from voice input");
+      console.error("No valid function call found. Response:", response.text());
+      throw new Error("Could not extract product command from voice input. Please try saying 'save product 1' or 'remove product 2'");
     }
 
     const args = functionCall.args as {
@@ -158,10 +167,19 @@ export const processTextCommand = async (text: string): Promise<{
     });
 
     const response = result.response;
+
+    // Debug logging
+    console.log("Gemini text response:", {
+      text: response.text(),
+      functionCalls: response.functionCalls(),
+      candidates: response.candidates,
+    });
+
     const functionCall = response.functionCalls()?.[0];
 
     if (!functionCall || functionCall.name !== "executeProductCommand") {
-      throw new Error("Could not extract product command from text input");
+      console.error("No valid function call found. Response:", response.text());
+      throw new Error("Could not extract product command from text input. Please try 'save product 1' or 'remove product 2'");
     }
 
     const args = functionCall.args as {

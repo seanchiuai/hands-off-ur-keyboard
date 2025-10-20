@@ -1,211 +1,239 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 
-// Initialize Gemini API client
 const getGeminiClient = () => {
-  const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  const apiKey =
+    process.env.GEMINI_API_KEY ?? process.env.NEXT_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("NEXT_PUBLIC_GEMINI_API_KEY is not configured. Please add it to .env.local");
+    throw new Error(
+      "GEMINI_API_KEY (or NEXT_PUBLIC_GEMINI_API_KEY) is not configured."
+    );
   }
   return new GoogleGenerativeAI(apiKey);
 };
 
-// System instruction for product management
-const SYSTEM_INSTRUCTION = `You are a voice-controlled product management assistant.
-Your role is to extract user intent and product numbers from voice commands.
+const PRICE_RESEARCH_SYSTEM_PROMPT = `You are a price tracking analyst helping users decide when to buy products.
+Given price histories, multi-store offers, and review excerpts you produce concise, actionable insights.
+Always answer in short paragraphs or bullet lists.`;
 
-Valid commands:
-- "save product [number]" or "add item [number]" or "save [number]"
-- "remove product [number]" or "delete item [number]" or "remove [number]"
-- "save products [number], [number], and [number]" for multiple items
-- "remove items [number] and [number]" for multiple items
+/**
+ * Summarise review snippets into pros/cons lists.
+ */
+export async function geminiSummarizeProsCons(texts: string[]) {
+  if (!texts.length) {
+    return { pros: [], cons: [] };
+  }
 
-Extract: { action: "save" | "remove", productNumbers: number[], confidence: number }
+  const client = getGeminiClient();
+  const model = client.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-Product numbers are always positive integers (1, 2, 3, etc.).
-If the command is unclear or doesn't match the pattern, return a low confidence score.`;
+  const prompt = [
+    "Summarise the following customer review snippets into concise pros and cons.",
+    "Return JSON in the exact format: {\"pros\": string[], \"cons\": string[]}.",
+    "Keep each entry under 12 words. Avoid duplicates.",
+    "",
+    texts.join("\n---\n"),
+  ].join("\n");
 
-// Initialize Gemini model with function calling
-export const createVoiceCommandModel = () => {
-  const genAI = getGeminiClient();
-
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    systemInstruction: SYSTEM_INSTRUCTION,
-    generationConfig: {
-      temperature: 0.1, // Low temperature for deterministic command extraction
-      topK: 1,
-      topP: 0.8,
-    },
-    tools: [{
-      functionDeclarations: [{
-        name: "executeProductCommand",
-        description: "Execute a save or remove command for one or more products",
-        parameters: {
-          type: SchemaType.OBJECT,
-          properties: {
-            action: {
-              type: SchemaType.STRING,
-              description: "The action to perform: 'save' or 'remove'",
-            },
-            productNumbers: {
-              type: SchemaType.ARRAY,
-              items: {
-                type: SchemaType.NUMBER,
-              },
-              description: "Array of product numbers referenced in the voice command (1-indexed)",
-            },
-            confidence: {
-              type: SchemaType.NUMBER,
-              description: "Confidence score from 0-1 for the extracted command",
-            },
-          },
-          required: ["action", "productNumbers", "confidence"],
-        },
-      }],
-    }],
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
 
-  return model;
-};
-
-// Process voice command and extract structured data
-export const processVoiceCommand = async (audioBlob: Blob): Promise<{
-  action: "save" | "remove";
-  productNumbers: number[];
-  confidence: number;
-  transcript: string;
-}> => {
+  const text = result.response.text();
   try {
-    const model = createVoiceCommandModel();
+    const parsed = JSON.parse(text ?? "{}");
+    return {
+      pros: Array.isArray(parsed.pros) ? parsed.pros : [],
+      cons: Array.isArray(parsed.cons) ? parsed.cons : [],
+    };
+  } catch (error) {
+    console.error("Failed to parse Gemini pros/cons response", error, text);
+    return { pros: [], cons: [] };
+  }
+}
 
-    // Convert blob to base64
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64');
+/**
+ * Evaluate offers and recommend the best value pick.
+ */
+export async function geminiBestOfferReasoning(context: {
+  item: {
+    title: string;
+    brand?: string | null;
+  };
+  offers: Array<{
+    store: string;
+    totalCents: number;
+    rating?: number;
+    inStock: boolean;
+    url?: string;
+  }>;
+  stats?: {
+    mean90: number;
+    min90: number;
+    stdev90: number;
+  };
+}) {
+  const client = getGeminiClient();
+  const model = client.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    systemInstruction: PRICE_RESEARCH_SYSTEM_PROMPT,
+  });
 
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{
-          inlineData: {
-            mimeType: audioBlob.type,
-            data: base64Audio,
+  const prompt = [
+    "Evaluate the following offers and recommend the best overall value.",
+    "Explain reasoning in <= 3 bullet points. Mention price (converted dollars) and rating.",
+    JSON.stringify(context, null, 2),
+  ].join("\n\n");
+
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+
+  return result.response.text();
+}
+
+/**
+ * Produce a natural-language verdict for the item (buy now, average, wait).
+ */
+export async function geminiDealVerdict(input: {
+  itemTitle: string;
+  verdict: "buy_now" | "average" | "wait_for_event";
+  currentPriceCents: number;
+  stats: {
+    mean90: number;
+    min90: number;
+    stdev90: number;
+  };
+  fakeSale: boolean;
+}) {
+  const client = getGeminiClient();
+  const model = client.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    systemInstruction: PRICE_RESEARCH_SYSTEM_PROMPT,
+  });
+
+  const prompt = [
+    "Create a short explanation (max 3 sentences) for the following deal verdict.",
+    JSON.stringify(input, null, 2),
+  ].join("\n\n");
+
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+
+  return result.response.text();
+}
+
+/**
+ * Legacy voice command helpers (kept for compatibility while the new price
+ * tracker is being built). They lightly wrap the new models but keep the same
+ * API surface so existing code continues to compile.
+ */
+const LEGACY_SYSTEM_INSTRUCTION = `You are a voice-controlled product management assistant.
+Return structured commands describing whether the user wants to save or remove products by number.`;
+
+export const createVoiceCommandModel = () => {
+  const client = getGeminiClient();
+  return client.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    systemInstruction: LEGACY_SYSTEM_INSTRUCTION,
+    tools: [
+      {
+        functionDeclarations: [
+          {
+            name: "executeProductCommand",
+            description:
+              "Execute a save or remove command for one or more products",
+            parameters: {
+              type: SchemaType.OBJECT,
+              properties: {
+                action: { type: SchemaType.STRING },
+                productNumbers: {
+                  type: SchemaType.ARRAY,
+                  items: { type: SchemaType.NUMBER },
+                },
+                confidence: { type: SchemaType.NUMBER },
+              },
+              required: ["action", "productNumbers", "confidence"],
+            },
           },
-        }],
-      }],
-    });
-
-    const response = result.response;
-
-    // Debug logging
-    console.log("Gemini response:", {
-      text: response.text(),
-      functionCalls: response.functionCalls(),
-      candidates: response.candidates,
-    });
-
-    const functionCall = response.functionCalls()?.[0];
-
-    if (!functionCall || functionCall.name !== "executeProductCommand") {
-      console.error("No valid function call found. Response:", response.text());
-      throw new Error("Could not extract product command from voice input. Please try saying 'save product 1' or 'remove product 2'");
-    }
-
-    const args = functionCall.args as {
-      action: string;
-      productNumbers: number[];
-      confidence: number;
-    };
-
-    // Validate action
-    if (args.action !== "save" && args.action !== "remove") {
-      throw new Error(`Invalid action: ${args.action}. Must be 'save' or 'remove'`);
-    }
-
-    // Validate product numbers
-    if (!args.productNumbers || args.productNumbers.length === 0) {
-      throw new Error("No product numbers extracted from command");
-    }
-
-    // Validate all numbers are positive integers
-    const invalidNumbers = args.productNumbers.filter(
-      (num) => !Number.isInteger(num) || num <= 0
-    );
-    if (invalidNumbers.length > 0) {
-      throw new Error(`Invalid product numbers: ${invalidNumbers.join(", ")}`);
-    }
-
-    // Get transcript for user feedback
-    const transcript = response.text() || "Voice command processed";
-
-    return {
-      action: args.action as "save" | "remove",
-      productNumbers: args.productNumbers,
-      confidence: args.confidence,
-      transcript,
-    };
-  } catch (error) {
-    console.error("Error processing voice command:", error);
-    throw error;
-  }
+        ],
+      },
+    ],
+  });
 };
 
-// Alternative: Process text command (for testing without audio)
-export const processTextCommand = async (text: string): Promise<{
+type LegacyCommand = {
   action: "save" | "remove";
   productNumbers: number[];
   confidence: number;
   transcript: string;
-}> => {
-  try {
-    const model = createVoiceCommandModel();
+};
 
-    const result = await model.generateContent({
-      contents: [{
+export const processVoiceCommand = async (
+  audioBlob: Blob
+): Promise<LegacyCommand> => {
+  const model = createVoiceCommandModel();
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+  const result = await model.generateContent({
+    contents: [
+      {
         role: "user",
-        parts: [{ text }],
-      }],
-    });
+        parts: [
+          {
+            inlineData: {
+              mimeType: audioBlob.type,
+              data: base64,
+            },
+          },
+        ],
+      },
+    ],
+  });
 
-    const response = result.response;
-
-    // Debug logging
-    console.log("Gemini text response:", {
-      text: response.text(),
-      functionCalls: response.functionCalls(),
-      candidates: response.candidates,
-    });
-
-    const functionCall = response.functionCalls()?.[0];
-
-    if (!functionCall || functionCall.name !== "executeProductCommand") {
-      console.error("No valid function call found. Response:", response.text());
-      throw new Error("Could not extract product command from text input. Please try 'save product 1' or 'remove product 2'");
-    }
-
-    const args = functionCall.args as {
-      action: string;
-      productNumbers: number[];
-      confidence: number;
-    };
-
-    // Validate action
-    if (args.action !== "save" && args.action !== "remove") {
-      throw new Error(`Invalid action: ${args.action}. Must be 'save' or 'remove'`);
-    }
-
-    // Validate product numbers
-    if (!args.productNumbers || args.productNumbers.length === 0) {
-      throw new Error("No product numbers extracted from command");
-    }
-
-    return {
-      action: args.action as "save" | "remove",
-      productNumbers: args.productNumbers,
-      confidence: args.confidence,
-      transcript: text,
-    };
-  } catch (error) {
-    console.error("Error processing text command:", error);
-    throw error;
+  const response = result.response;
+  const functionCall = response.functionCalls()?.[0];
+  if (!functionCall || functionCall.name !== "executeProductCommand") {
+    throw new Error("Could not extract product command from voice input");
   }
+  const args = functionCall.args as {
+    action: string;
+    productNumbers: number[];
+    confidence: number;
+  };
+
+  return {
+    action: args.action === "remove" ? "remove" : "save",
+    productNumbers: args.productNumbers ?? [],
+    confidence: args.confidence ?? 0,
+    transcript: response.text() ?? "",
+  };
+};
+
+export const processTextCommand = async (
+  text: string
+): Promise<LegacyCommand> => {
+  const model = createVoiceCommandModel();
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text }] }],
+  });
+  const response = result.response;
+  const functionCall = response.functionCalls()?.[0];
+  if (!functionCall || functionCall.name !== "executeProductCommand") {
+    throw new Error("Could not extract product command from text input");
+  }
+
+  const args = functionCall.args as {
+    action: string;
+    productNumbers: number[];
+    confidence: number;
+  };
+
+  return {
+    action: args.action === "remove" ? "remove" : "save",
+    productNumbers: args.productNumbers ?? [],
+    confidence: args.confidence ?? 0,
+    transcript: text,
+  };
 };

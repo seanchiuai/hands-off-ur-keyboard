@@ -1,228 +1,111 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-// The schema is entirely optional.
-// You can delete this file (schema.ts) and the
-// app will continue to work.
-// The schema provides more precise TypeScript types.
+/**
+ * Convex schema for the price tracker research agent.
+ *
+ * Compared to the original voice-shopping schema, this stores richer product
+ * metadata plus analytics artefacts (offers, snapshots, review cache, alert
+ * history).  Optional fields are used so the background agent can gradually
+ * hydrate missing data.
+ */
 export default defineSchema({
-  // Voice shopping sessions - Real-time Daily.co rooms
-  voiceSessions: defineTable({
-    userId: v.string(), // Clerk user ID
-    roomUrl: v.optional(v.string()), // Daily room URL
-    roomName: v.optional(v.string()), // Daily room name
-    status: v.union(v.literal("active"), v.literal("ended"), v.literal("error")),
-    startedAt: v.number(),
-    endedAt: v.optional(v.number()),
-    metadata: v.optional(v.object({
-      duration: v.optional(v.number()),
-      errorMessage: v.optional(v.string()),
-      autoEnded: v.optional(v.boolean()),
-    })),
-  })
-    .index("by_user", ["userId"])
-    .index("by_status", ["status"]),
+  users: defineTable({
+    clerkId: v.string(),
+    email: v.string(),
+    createdAt: v.number(),
+  }).index("byClerkId", ["clerkId"]),
 
-  // Products discovered during voice shopping
-  products: defineTable({
-    sessionId: v.id("voiceSessions"), // Links to voice session
-    name: v.string(),
-    price: v.number(), // Store in cents to avoid floating point issues
-    currency: v.string(), // e.g., "USD"
-    imageUrl: v.string(), // Product image URL
-    description: v.string(),
-    vendor: v.optional(v.string()),
-    externalUrl: v.optional(v.string()), // Link to product page
-    position: v.number(), // Order in which voice agent found the product
-    createdAt: v.number(), // Timestamp for consistent ordering
-  })
-    .index("by_session", ["sessionId", "position"]) // Efficient session-based queries
-    .index("by_created", ["createdAt"]), // Fallback ordering
-
-  // Saved products for voice commands
-  savedProducts: defineTable({
-    userId: v.string(), // Clerk user ID
-    productId: v.string(), // Product identifier
-    productNumber: v.number(), // Display number for voice commands (1-indexed)
-    productName: v.string(), // Product name for confirmation
-    productDetails: v.optional(v.object({
-      imageUrl: v.string(),
-      price: v.number(),
-      category: v.string(),
-    })),
-    savedAt: v.number(), // Timestamp for ordering
-    lastModified: v.number(),
-    savedVia: v.union(v.literal("voice"), v.literal("click")),
-    voiceCommand: v.optional(v.string()), // Original command if saved via voice
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_and_product", ["userId", "productId"])
-    .index("by_user_and_number", ["userId", "productNumber"]),
-
-  // Voice commands log for analytics
-  voiceCommands: defineTable({
-    userId: v.string(),
-    sessionId: v.string(), // Voice session identifier
-    command: v.string(), // Raw voice input
-    intent: v.union(
-      v.literal("save_product"),
-      v.literal("remove_product"),
-      v.literal("save_multiple"),
-      v.literal("remove_multiple"),
-      v.literal("unknown")
-    ),
-    parameters: v.object({
-      numbers: v.array(v.number()),
-      action: v.union(v.literal("save"), v.literal("remove")),
-    }),
-    executedAt: v.number(),
-    successful: v.boolean(),
-    errorMessage: v.optional(v.string()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_session", ["sessionId"])
-    .index("by_intent", ["intent"]),
-
-  // Voice transcripts - Real-time conversation logs
-  voiceTranscripts: defineTable({
-    sessionId: v.id("voiceSessions"),
-    userId: v.string(),
-    speaker: v.union(v.literal("user"), v.literal("agent")),
-    text: v.string(),
-    timestamp: v.number(),
-    confidence: v.optional(v.number()),
-  })
-    .index("by_session", ["sessionId"])
-    .index("by_user", ["userId"]),
-
-  // Search cache for faster repeated searches
-  searchCache: defineTable({
-    queryHash: v.string(), // Hash of search parameters
-    results: v.array(v.any()), // Cached product data
-    expiresAt: v.number(),
-    hitCount: v.number(),
-  })
-    .index("by_hash", ["queryHash"])
-    .index("by_expiry", ["expiresAt"]),
-
-  // Search products (results from searches)
-  searchProducts: defineTable({
-    searchId: v.id("productSearches"),
-    userId: v.string(),
+  items: defineTable({
+    ownerClerkId: v.optional(v.string()),
     title: v.string(),
-    price: v.number(),
-    currency: v.string(),
-    imageUrl: v.optional(v.string()),
-    productUrl: v.string(),
-    source: v.string(), // "amazon", "ebay", etc.
-    number: v.number(), // Sequential number for voice reference
-    details: v.optional(v.object({
-      rating: v.optional(v.number()),
-      reviewCount: v.optional(v.number()),
-      availability: v.optional(v.string()),
-      features: v.optional(v.array(v.string())),
-    })),
+    url: v.string(),
+    asin: v.optional(v.string()),
+    sku: v.optional(v.string()),
+    image: v.optional(v.string()),
+    category: v.optional(v.string()),
+    brand: v.optional(v.string()),
+    model: v.optional(v.string()),
+    description: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    metadata: v.optional(
+      v.object({
+        color: v.optional(v.string()),
+        storage: v.optional(v.string()),
+        variant: v.optional(v.string()),
+        source: v.optional(v.string()),
+      })
+    ),
+    lastCheckedAt: v.optional(v.number()),
     createdAt: v.number(),
-  })
-    .index("by_search", ["searchId"])
-    .index("by_user", ["userId"])
-    .index("by_search_number", ["searchId", "number"]),
+  }).index("byOwner", ["ownerClerkId"]),
 
-  // Search history for tracking user searches
-  searchHistory: defineTable({
-    userId: v.string(),
+  offers: defineTable({
+    itemId: v.id("items"),
+    store: v.string(),
+    seller: v.optional(v.string()),
+    priceCents: v.number(),
+    shippingCents: v.number(),
+    taxRate: v.number(),
+    inStock: v.boolean(),
+    rating: v.optional(v.number()),
+    reviewCount: v.optional(v.number()),
+    url: v.string(),
+    condition: v.optional(v.string()),
+    shippingSpeed: v.optional(v.string()),
+    dealType: v.optional(v.string()),
+    normalizedTotalCents: v.optional(v.number()),
+    lastUpdatedAt: v.optional(v.number()),
+    capturedAt: v.optional(v.number()),
+  }).index("byItemTime", ["itemId", "lastUpdatedAt"]),
+
+  snapshots: defineTable({
+    itemId: v.id("items"),
+    source: v.string(),
+    priceCents: v.number(),
+    totalCents: v.number(),
+    capturedAt: v.number(),
+    annotations: v.optional(
+      v.object({
+        note: v.optional(v.string()),
+        source: v.optional(v.string()),
+      })
+    ),
+  }).index("byItemTime", ["itemId", "capturedAt"]),
+
+  wishlists: defineTable({
+    clerkId: v.string(),
+    itemId: v.id("items"),
+    targetCents: v.optional(v.number()),
+    dropPercent: v.optional(v.number()),
+    priority: v.optional(v.union(v.literal("high"), v.literal("medium"), v.literal("low"))),
+    notes: v.optional(v.string()),
+    notificationSent: v.optional(v.boolean()),
+    lastAlertedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  }).index("byUser", ["clerkId"]),
+
+  reviewCache: defineTable({
+    itemId: v.id("items"),
+    source: v.string(),
     query: v.string(),
-    resultCount: v.number(),
-    searchedAt: v.number(),
-  })
-    .index("by_user", ["userId"]),
+    summary: v.string(),
+    capturedAt: v.number(),
+    pros: v.optional(v.array(v.string())),
+    cons: v.optional(v.array(v.string())),
+  }).index("byItemSource", ["itemId", "source"]),
 
-  // Product searches
-  productSearches: defineTable({
-    userId: v.string(),
-    sessionId: v.string(),
-    query: v.string(),
-    parameters: v.object({
-      category: v.optional(v.string()),
-      priceMin: v.optional(v.number()),
-      priceMax: v.optional(v.number()),
-      features: v.optional(v.array(v.string())),
-      keywords: v.array(v.string()),
-    }),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("extracting"),
-      v.literal("searching"),
-      v.literal("completed"),
-      v.literal("failed")
-    ),
+  alertEvents: defineTable({
+    clerkId: v.string(),
+    itemId: v.id("items"),
+    reason: v.string(),
+    priceCents: v.number(),
+    previousPrice: v.optional(v.number()),
+    percentageChange: v.optional(v.number()),
+    store: v.optional(v.string()),
+    viewed: v.optional(v.boolean()),
+    clicked: v.optional(v.boolean()),
     createdAt: v.number(),
-    completedAt: v.optional(v.number()),
-    errorMessage: v.optional(v.string()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_session", ["sessionId"])
-    .index("by_status", ["status"]),
-
-  // User preferences extracted from voice interactions
-  userPreferences: defineTable({
-    userId: v.string(), // Clerk user ID
-    tag: v.string(), // "wooden", "under $20", "at least 3ft"
-    category: v.union(
-      v.literal("material"),
-      v.literal("price"),
-      v.literal("size"),
-      v.literal("feature"),
-      v.literal("color"),
-      v.literal("style"),
-      v.literal("other")
-    ),
-    value: v.optional(v.union(v.string(), v.number())), // Structured value if applicable
-    extractedFrom: v.string(), // Original voice command
-    priority: v.number(), // 1-10 scale based on user emphasis
-    source: v.union(v.literal("voice"), v.literal("manual")), // How tag was created
-    productContext: v.optional(v.string()), // Product type this preference applies to
-    createdAt: v.number(),
-    expiresAt: v.optional(v.number()), // Auto-expire old preferences (30 days)
-    useCount: v.number(), // Times used in searches
-    lastUsedAt: v.number(), // Track when preference was last applied
-  })
-    .index("by_user", ["userId"])
-    .index("by_user_and_category", ["userId", "category"]),
-
-  // Search refinement history for tracking user refinement patterns
-  searchRefinements: defineTable({
-    userId: v.string(),
-    originalSearchId: v.string(), // Reference to initial search
-    refinementType: v.union(
-      v.literal("cheaper"),
-      v.literal("price_lower"),
-      v.literal("price_higher"),
-      v.literal("feature"),
-      v.literal("add_feature"),
-      v.literal("remove_feature"),
-      v.literal("price_range"),
-      v.literal("change_size"),
-      v.literal("custom")
-    ),
-    voiceCommand: v.string(),
-    extractedPreferences: v.array(v.string()), // Tags extracted from command
-    refinementValue: v.optional(v.string()), // Specific refinement detail
-    targetPercentage: v.optional(v.number()), // For price refinements
-    newSearchId: v.string(), // Reference to refined search
-    resultCount: v.optional(v.number()), // How many results the refinement returned
-    createdAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_original_search", ["originalSearchId"]),
-
-  // Preference usage history
-  preferenceHistory: defineTable({
-    userId: v.string(),
-    preferenceId: v.id("userPreferences"),
-    usedInSearchId: v.string(),
-    usedAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_preference", ["preferenceId"]),
+  }).index("byUserTime", ["clerkId", "createdAt"]),
 });

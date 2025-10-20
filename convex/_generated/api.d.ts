@@ -8,18 +8,12 @@
  * @module
  */
 
-import type * as brightdata from "../brightdata.js";
-import type * as productSearch from "../productSearch.js";
-import type * as products from "../products.js";
-import type * as searchCache from "../searchCache.js";
-import type * as searchProducts from "../searchProducts.js";
-import type * as searchRefinements from "../searchRefinements.js";
-import type * as sessions from "../sessions.js";
-import type * as userPreferences from "../userPreferences.js";
-import type * as voiceCommands from "../voiceCommands.js";
-import type * as voiceSearch from "../voiceSearch.js";
-import type * as voiceSessions from "../voiceSessions.js";
-import type * as voiceTranscripts from "../voiceTranscripts.js";
+import type * as functions_cron from "../functions/cron.js";
+import type * as functions_items from "../functions/items.js";
+import type * as functions_offers from "../functions/offers.js";
+import type * as functions_reviews from "../functions/reviews.js";
+import type * as functions_snapshots from "../functions/snapshots.js";
+import type * as functions_wishlists from "../functions/wishlists.js";
 
 import type {
   ApiFromModules,
@@ -36,18 +30,12 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  brightdata: typeof brightdata;
-  productSearch: typeof productSearch;
-  products: typeof products;
-  searchCache: typeof searchCache;
-  searchProducts: typeof searchProducts;
-  searchRefinements: typeof searchRefinements;
-  sessions: typeof sessions;
-  userPreferences: typeof userPreferences;
-  voiceCommands: typeof voiceCommands;
-  voiceSearch: typeof voiceSearch;
-  voiceSessions: typeof voiceSessions;
-  voiceTranscripts: typeof voiceTranscripts;
+  "functions/cron": typeof functions_cron;
+  "functions/items": typeof functions_items;
+  "functions/offers": typeof functions_offers;
+  "functions/reviews": typeof functions_reviews;
+  "functions/snapshots": typeof functions_snapshots;
+  "functions/wishlists": typeof functions_wishlists;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 
